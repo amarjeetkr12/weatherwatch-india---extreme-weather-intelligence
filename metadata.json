@@ -1,0 +1,6 @@
+{
+  "name": "WeatherWatch India - Extreme Weather Intelligence",
+  "description": "AI-driven global and regional extreme weather intelligence platform featuring live meteorological monitoring, ML anomaly detection, hazard tracking, and interactive spatial analytics.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

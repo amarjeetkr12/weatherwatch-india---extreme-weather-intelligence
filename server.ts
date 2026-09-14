@@ -50,6 +50,16 @@ function getWindCompass(degrees: number): string {
   return directions[index];
 }
 
+function distanceKmBetween(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const toRadians = (value: number) => value * Math.PI / 180;
+  const earthRadiusKm = 6371;
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) ** 2;
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // Calculate ML Anomaly & Risk metrics from physical meteorological values
 function computeMLAnomalyIntelligence(
   temp: number,
@@ -178,10 +188,8 @@ app.get('/api/geocoding', async (req, res) => {
     return res.json([presetMatch[1]]);
   }
 
-  // Generic fallback if not matched
-  res.json([
-    { name: query.charAt(0).toUpperCase() + query.slice(1), country: 'Global Region', lat: 28.6139, lon: 77.2090 }
-  ]);
+  // Never turn an unknown place into a misleading Delhi result.
+  res.json([]);
 });
 
 // Live Weather & Forecast Endpoint
@@ -347,43 +355,9 @@ app.get('/api/weather', async (req, res) => {
         cachedNotice: `Showing last valid cached data from ${new Date(cached.timestamp).toLocaleTimeString()}`
       });
     }
-
-    // High fidelity fallback with exact requested location
-    const fallbackBaseline = computeMLAnomalyIntelligence(10.6, 0.0, 14.0, lat);
-    res.json({
-      weather: {
-        location: locationName,
-        country: countryName,
-        lat,
-        lon,
-        temperature: 10.6,
-        apparentTemperature: 14.0,
-        humidity: 55,
-        windSpeed: 14.0,
-        windDirection: 315,
-        windDirectionCompass: 'NW',
-        rainProbability: 0,
-        precipitation: 0.0,
-        pressure: 1014.2,
-        visibility: 10.0,
-        uvIndex: 4.0,
-        weatherCode: 2,
-        condition: 'Partly Cloudy',
-        aqi: { value: 73, category: 'Moderate', pm25: 34.0, pm10: 68.0 },
-        source: 'MODEL-DERIVED',
-        lastUpdated: new Date().toLocaleTimeString()
-      },
-      forecast: [
-        { dayName: 'Today', date: '2026-09-14', maxTemp: 18.2, minTemp: 8.5, precipitation: 0.0, rainProbability: 0, windSpeed: 14.0, condition: 'Partly Cloudy', weatherCode: 2, anomalyScore: 0.74, riskLevel: 'Moderate' },
-        { dayName: '+1 Day', date: '2026-09-15', maxTemp: 19.5, minTemp: 9.1, precipitation: 0.0, rainProbability: 5, windSpeed: 12.5, condition: 'Mainly Clear', weatherCode: 1, anomalyScore: 0.65, riskLevel: 'Low' },
-        { dayName: '+2 Days', date: '2026-09-16', maxTemp: 21.0, minTemp: 10.2, precipitation: 0.2, rainProbability: 15, windSpeed: 11.0, condition: 'Clear Sky', weatherCode: 0, anomalyScore: 0.45, riskLevel: 'Low' },
-        { dayName: '+3 Days', date: '2026-09-17', maxTemp: 22.4, minTemp: 11.5, precipitation: 0.0, rainProbability: 10, windSpeed: 13.0, condition: 'Mainly Clear', weatherCode: 1, anomalyScore: 0.38, riskLevel: 'Low' },
-        { dayName: '+4 Days', date: '2026-09-18', maxTemp: 23.0, minTemp: 12.0, precipitation: 1.5, rainProbability: 25, windSpeed: 15.2, condition: 'Partly Cloudy', weatherCode: 2, anomalyScore: 0.42, riskLevel: 'Low' },
-        { dayName: '+5 Days', date: '2026-09-19', maxTemp: 23.8, minTemp: 12.4, precipitation: 0.0, rainProbability: 10, windSpeed: 14.0, condition: 'Clear Sky', weatherCode: 0, anomalyScore: 0.35, riskLevel: 'Low' },
-        { dayName: '+6 Days', date: '2026-09-20', maxTemp: 24.5, minTemp: 13.0, precipitation: 0.0, rainProbability: 10, windSpeed: 13.5, condition: 'Mainly Clear', weatherCode: 1, anomalyScore: 0.30, riskLevel: 'Low' },
-        { dayName: '+7 Days', date: '2026-09-21', maxTemp: 25.0, minTemp: 13.5, precipitation: 0.0, rainProbability: 10, windSpeed: 12.0, condition: 'Clear Sky', weatherCode: 0, anomalyScore: 0.28, riskLevel: 'Low' }
-      ],
-      anomaly: fallbackBaseline
+    return res.status(503).json({
+      error: 'Live weather provider unavailable',
+      message: 'No cached observation is available for this location. Try again shortly.'
     });
   }
 });
@@ -413,31 +387,28 @@ app.get('/api/hazards', async (req, res) => {
     console.warn('USGS feed fetch fallback', err);
   }
 
-  // If USGS feed fails or returned few, append verified observed earthquakes
-  if (earthquakes.length === 0) {
-    earthquakes = [
-      { id: 'eq-01', magnitude: 5.4, location: 'Near Coast of Honshu, Japan', depthKm: 35.0, time: '2026-09-14T06:18:22Z', coordinates: [37.8, 142.1], tsunamiWarning: false, source: 'USGS / JMA Observed' },
-      { id: 'eq-02', magnitude: 4.8, location: 'Hindukush Region, Afghanistan-Tajikistan Border', depthKm: 185.0, time: '2026-09-14T04:42:10Z', coordinates: [36.4, 70.8], tsunamiWarning: false, source: 'USGS / NCS Delhi Observed' },
-      { id: 'eq-03', magnitude: 5.1, location: 'Nicobar Islands Region, India', depthKm: 42.0, time: '2026-09-13T21:14:00Z', coordinates: [8.9, 93.6], tsunamiWarning: false, source: 'NCS / IMD National Seismology' },
-      { id: 'eq-04', magnitude: 4.7, location: 'Northern California (Gorda Ridge)', depthKm: 10.0, time: '2026-09-13T18:25:00Z', coordinates: [40.8, -125.2], tsunamiWarning: false, source: 'USGS Menlo Park' }
-    ];
-  }
-
   res.json({
     earthquakes,
-    cyclones: OBSERVED_CYCLONES,
-    tsunamis: TSUNAMI_EVENTS,
+    cyclones: [],
+    tsunamis: [],
     lastUpdated: new Date().toISOString()
   });
 });
 
 // Hazard sub-routes for specific feeds
 app.get('/api/hazards/earthquakes', async (req, res) => {
+  const lat = Number(req.query.lat);
+  const lon = Number(req.query.lon);
+  const hasLocation = Number.isFinite(lat) && Number.isFinite(lon);
+  const feedUrl = hasLocation
+    ? `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&latitude=${lat}&longitude=${lon}&maxradiuskm=1000&minmagnitude=2.5&orderby=time&limit=50`
+    : 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson';
+
   try {
-    const usgsRes = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson', { signal: AbortSignal.timeout(4000) });
+    const usgsRes = await fetch(feedUrl, { signal: AbortSignal.timeout(5000) });
     if (usgsRes.ok) {
       const usgsData = await usgsRes.json();
-      const features = (usgsData.features || []).slice(0, 15);
+      const features = (usgsData.features || []).slice(0, 50);
       return res.json(features.map((f: any) => ({
         id: f.id,
         magnitude: f.properties.mag,
@@ -446,23 +417,22 @@ app.get('/api/hazards/earthquakes', async (req, res) => {
         time: new Date(f.properties.time).toISOString(),
         coordinates: [f.geometry.coordinates[1], f.geometry.coordinates[0]],
         tsunamiWarning: f.properties.tsunami === 1,
-        source: 'USGS NEIC Real-Time Feed'
+        source: 'USGS NEIC Real-Time Feed',
+        distanceKm: hasLocation
+          ? Number(distanceKmBetween(lat, lon, f.geometry.coordinates[1], f.geometry.coordinates[0]).toFixed(1))
+          : undefined
       })));
     }
   } catch (e) {}
-  res.json([
-    { id: 'eq-01', magnitude: 5.4, location: 'Near Coast of Honshu, Japan', depthKm: 35.0, time: '2026-09-14T06:18:22Z', coordinates: [37.8, 142.1], tsunamiWarning: false, source: 'USGS / JMA Observed' },
-    { id: 'eq-02', magnitude: 4.8, location: 'Hindukush Region, Afghanistan-Tajikistan Border', depthKm: 185.0, time: '2026-09-14T04:42:10Z', coordinates: [36.4, 70.8], tsunamiWarning: false, source: 'USGS / NCS Delhi Observed' },
-    { id: 'eq-03', magnitude: 5.1, location: 'Nicobar Islands Region, India', depthKm: 42.0, time: '2026-09-13T21:14:00Z', coordinates: [8.9, 93.6], tsunamiWarning: false, source: 'NCS / IMD National Seismology' }
-  ]);
+  res.json([]);
 });
 
 app.get('/api/hazards/cyclones', (req, res) => {
-  res.json(OBSERVED_CYCLONES);
+  res.json([]);
 });
 
 app.get('/api/hazards/tsunamis', (req, res) => {
-  res.json(TSUNAMI_EVENTS);
+  res.json([]);
 });
 
 // Grid cells endpoint

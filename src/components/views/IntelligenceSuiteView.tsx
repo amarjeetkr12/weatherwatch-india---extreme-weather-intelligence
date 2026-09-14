@@ -42,19 +42,32 @@ export const IntelligenceSuiteView: React.FC<IntelligenceSuiteViewProps> = ({
   }, []);
 
   const sections = [
-    { id: 'intel-global-map', label: '1. Global Spatial Map', icon: Globe2 },
-    { id: 'intel-forecast-trajectory', label: '2. Forecast Trajectory & Risk', icon: Activity },
-    { id: 'intel-events', label: '3. Spatio-Temporal Events', icon: GitCommit },
-    { id: 'intel-anomaly-registry', label: '4. Anomaly Registry', icon: Layers },
-    { id: 'intel-advisory-feed', label: '5. Advisory Feed', icon: FileText },
-    { id: 'intel-diagnostics', label: '6. Diagnostics & Quality', icon: Cpu }
+    { id: 'intel-global-map', number: '01', label: 'Global Spatial Map', detail: 'Coverage & anomalies', icon: Globe2, accent: 'blue' },
+    { id: 'intel-forecast-trajectory', number: '02', label: 'Forecast Trajectory', detail: 'Ensemble risk', icon: Activity, accent: 'violet' },
+    { id: 'intel-events', number: '03', label: 'Event Tracking', detail: 'Space & time', icon: GitCommit, accent: 'amber' },
+    { id: 'intel-anomaly-registry', number: '04', label: 'Anomaly Registry', detail: 'ML signal ledger', icon: Layers, accent: 'rose' },
+    { id: 'intel-advisory-feed', number: '05', label: 'Advisory Feed', detail: 'Official bulletins', icon: FileText, accent: 'emerald' },
+    { id: 'intel-diagnostics', number: '06', label: 'Diagnostics', detail: 'Quality & provenance', icon: Cpu, accent: 'slate' }
   ];
 
   return (
     <div id="intelligence-suite-view" className="space-y-4">
-      {/* Top Section Nav Tabs */}
-      <div className="bg-white border border-gray-200 rounded-xl p-2 shadow-2xs">
-        <div className="flex items-center space-x-1 overflow-x-auto">
+      {/* Six-core intelligence command surface */}
+      <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3 shadow-lg shadow-slate-200/60">
+        <div className="flex items-center justify-between gap-3 px-1 pb-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_0_4px_rgba(52,211,153,0.12)]" />
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Intelligence Suite</p>
+            </div>
+            <h2 className="mt-1 text-sm font-bold text-white">Six-core operational intelligence</h2>
+          </div>
+          <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-[10px] font-semibold text-slate-300">
+            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+            Live workspace
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
           {sections.map((sec) => {
             const Icon = sec.icon;
             const isActive = activeSection === sec.id;
@@ -62,14 +75,20 @@ export const IntelligenceSuiteView: React.FC<IntelligenceSuiteViewProps> = ({
               <button
                 key={sec.id}
                 onClick={() => setActiveSection(sec.id as any)}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center space-x-2 shrink-0 transition-all ${
+                className={`group min-w-0 rounded-xl border p-2.5 text-left transition-all ${
                   isActive
-                    ? 'bg-blue-600 text-white shadow-2xs'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    ? 'border-white/20 bg-white text-slate-950 shadow-lg shadow-black/20'
+                    : 'border-slate-800 bg-slate-900/80 text-slate-300 hover:border-slate-600 hover:bg-slate-800'
                 }`}
               >
-                <Icon className="w-4 h-4" />
-                <span>{sec.label}</span>
+                <span className="flex items-center justify-between gap-2">
+                  <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${isActive ? 'bg-slate-100 text-slate-800' : 'bg-slate-800 text-slate-400 group-hover:text-white'}`}>
+                    <Icon className="w-3.5 h-3.5" />
+                  </span>
+                  <span className={`text-[10px] font-mono font-bold ${isActive ? 'text-slate-400' : 'text-slate-600'}`}>{sec.number}</span>
+                </span>
+                <span className="mt-2 block truncate text-[11px] font-bold">{sec.label}</span>
+                <span className={`mt-0.5 block truncate text-[10px] ${isActive ? 'text-slate-500' : 'text-slate-500'}`}>{sec.detail}</span>
               </button>
             );
           })}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CloudSun, Search, Bell, Clock, ShieldCheck, MapPin, CheckCircle2, AlertCircle, RefreshCw, ChevronDown, AlertTriangle } from 'lucide-react';
+import { CloudSun, Search, Bell, Clock, CalendarDays, ShieldCheck, MapPin, CheckCircle2, AlertCircle, RefreshCw, ChevronDown, AlertTriangle } from 'lucide-react';
 import { PRESET_GEOCODING } from '../data/defaultData';
 import { UserProfileModal } from './UserProfileModal';
 import { UserProfile } from '../types/weather';
@@ -49,6 +49,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   const [suggestions, setSuggestions] = useState<Array<{ name: string; country: string; state?: string; lat: number; lon: number }>>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [currentDate, setCurrentDate] = useState('');
   const [currentTime, setCurrentTime] = useState('');
   const [showLiveTooltip, setShowLiveTooltip] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -98,10 +99,22 @@ export const Header: React.FC<HeaderProps> = ({
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      // Format like "14 Sep 2026, 14:46 IST"
-      const datePart = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-      const timePart = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
-      setCurrentTime(`${datePart}, ${timePart} IST`);
+      const datePart = new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        weekday: 'short',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      }).format(now);
+      const timePart = new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      }).format(now);
+      setCurrentDate(datePart);
+      setCurrentTime(timePart);
     };
     updateTime();
     const interval = setInterval(updateTime, 1000);
@@ -282,9 +295,12 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Right: Date/Time, Live Status, Notifications, User Profile */}
       <div className="flex items-center space-x-3 shrink-0 text-sm">
         {/* Date / Time */}
-        <div className="hidden lg:flex items-center text-xs font-medium text-gray-600 space-x-1.5">
+        <div className="hidden lg:flex items-center gap-2 text-xs font-medium text-gray-600" title="Live India Standard Time">
+          <CalendarDays className="w-3.5 h-3.5 text-blue-500" />
+          <span className="whitespace-nowrap">{currentDate || 'Loading date...'}</span>
+          <span className="h-4 w-px bg-gray-200" aria-hidden="true" />
           <Clock className="w-3.5 h-3.5 text-gray-400" />
-          <span>{currentTime || '14 Sep 2026, 14:46 IST'}</span>
+          <span className="font-mono tabular-nums whitespace-nowrap">{currentTime || '--:--:--'} IST</span>
         </div>
 
         {/* Live Data Status Indicator with Tooltip & Quick Refresh */}

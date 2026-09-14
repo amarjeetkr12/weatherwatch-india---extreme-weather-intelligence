@@ -60,11 +60,11 @@ export default function App() {
   const [dataConnected, setDataConnected] = useState<boolean>(true);
 
   // Fetch initial static/global data
-  const fetchGlobalFeeds = useCallback(async () => {
+  const fetchGlobalFeeds = useCallback(async (lat: number, lon: number) => {
     try {
       const [kpiRes, eqRes, cycRes, tsuRes, dsRes, gridRes] = await Promise.all([
         fetch('/api/kpis').then(r => r.json()).catch(() => defaultKPIStats),
-        fetch('/api/hazards/earthquakes').then(r => r.json()).catch(() => []),
+        fetch(`/api/hazards/earthquakes?lat=${lat}&lon=${lon}`).then(r => r.json()).catch(() => []),
         fetch('/api/hazards/cyclones').then(r => r.json()).catch(() => []),
         fetch('/api/hazards/tsunamis').then(r => r.json()).catch(() => []),
         fetch('/api/datasets').then(r => r.json()).catch(() => initialDatasets),
@@ -95,8 +95,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    fetchGlobalFeeds();
-  }, [fetchGlobalFeeds]);
+    fetchGlobalFeeds(selectedLocation.lat, selectedLocation.lon);
+  }, [fetchGlobalFeeds, selectedLocation.lat, selectedLocation.lon]);
 
   // Fetch weather and forecast when selectedLocation changes
   const fetchWeatherData = useCallback(async (lat: number, lon: number, locationName: string) => {
@@ -163,6 +163,16 @@ export default function App() {
     fetchWeatherData(selectedLocation.lat, selectedLocation.lon, selectedLocation.name);
   }, [selectedLocation, fetchWeatherData]);
 
+  // Keep the selected location's weather and nearby hazard context current.
+  useEffect(() => {
+    const refreshLiveLocationData = () => {
+      fetchWeatherData(selectedLocation.lat, selectedLocation.lon, selectedLocation.name);
+      fetchGlobalFeeds(selectedLocation.lat, selectedLocation.lon);
+    };
+    const interval = setInterval(refreshLiveLocationData, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [fetchGlobalFeeds, fetchWeatherData, selectedLocation]);
+
   // Handle Location Selection from Search or Presets
   const handleSelectLocation = (loc: { name: string; country: string; lat: number; lon: number }) => {
     setSelectedLocation(loc);
@@ -182,7 +192,7 @@ export default function App() {
   };
 
   const handleManualRefresh = useCallback(() => {
-    fetchGlobalFeeds();
+    fetchGlobalFeeds(selectedLocation.lat, selectedLocation.lon);
     fetchWeatherData(selectedLocation.lat, selectedLocation.lon, selectedLocation.name);
     handleRefreshDatasets();
   }, [fetchGlobalFeeds, fetchWeatherData, selectedLocation]);

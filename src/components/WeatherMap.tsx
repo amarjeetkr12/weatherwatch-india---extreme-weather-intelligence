@@ -93,23 +93,27 @@ export const WeatherMap: React.FC<WeatherMapProps> = ({
       case 'satellite':
         return {
           url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-          attribution: '&copy; Esri, Maxar, Earthstar Geographics, USDA, USGS, AeroGRID, IGN, and the GIS User Community'
+          attribution: '&copy; Esri, Maxar, Earthstar Geographics, USDA, USGS, AeroGRID, IGN, and the GIS User Community',
+          maxNativeZoom: 19
         };
       case 'terrain':
         return {
           url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
-          attribution: '&copy; Esri, HERE, Garmin, Intermap, increment P Corp., GEBCO, USGS, FAO, NPS, NRCAN, GeoBase, IGN, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong)'
+          attribution: '&copy; Esri, HERE, Garmin, Intermap, increment P Corp., GEBCO, USGS, FAO, NPS, NRCAN, GeoBase, IGN, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong)',
+          maxNativeZoom: 19
         };
       case 'carto':
         return {
           url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+          maxNativeZoom: 20
         };
       case 'osm':
       default:
         return {
           url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors'
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
+          maxNativeZoom: 19
         };
     }
   };
@@ -138,7 +142,12 @@ export const WeatherMap: React.FC<WeatherMapProps> = ({
     const tileConf = getTileConfig('osm');
     const tileLayer = L.tileLayer(tileConf.url, {
       attribution: tileConf.attribution,
-      maxZoom: 19
+      maxNativeZoom: tileConf.maxNativeZoom,
+      maxZoom: 20,
+      detectRetina: true,
+      updateWhenIdle: true,
+      updateWhenZooming: false,
+      keepBuffer: 3
     }).addTo(map);
 
     tileLayerRef.current = tileLayer;
@@ -178,9 +187,19 @@ export const WeatherMap: React.FC<WeatherMapProps> = ({
   // Switch basemap tiles
   const handleBasemapChange = (type: BasemapType) => {
     setBasemap(type);
-    if (!mapInstanceRef.current || !tileLayerRef.current) return;
+    if (!mapInstanceRef.current) return;
     const config = getTileConfig(type);
-    tileLayerRef.current.setUrl(config.url);
+    const map = mapInstanceRef.current;
+    tileLayerRef.current?.removeFrom(map);
+    tileLayerRef.current = L.tileLayer(config.url, {
+      attribution: config.attribution,
+      maxNativeZoom: config.maxNativeZoom,
+      maxZoom: 20,
+      detectRetina: true,
+      updateWhenIdle: true,
+      updateWhenZooming: false,
+      keepBuffer: 3
+    }).addTo(map);
   };
 
   // Fullscreen toggle
@@ -965,7 +984,8 @@ export const WeatherMap: React.FC<WeatherMapProps> = ({
           <div className="bg-white/95 backdrop-blur-xs border border-gray-300 rounded-lg shadow-md flex flex-col divide-y divide-gray-200 overflow-hidden">
             <button
               onClick={handleZoomIn}
-              className="p-2 hover:bg-gray-100 text-gray-700 transition-colors"
+              disabled={currentZoom >= 20}
+              className="p-2 hover:bg-gray-100 text-gray-700 transition-colors disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
               title="Zoom In (+)"
               aria-label="Zoom in"
             >
@@ -973,12 +993,16 @@ export const WeatherMap: React.FC<WeatherMapProps> = ({
             </button>
             <button
               onClick={handleZoomOut}
-              className="p-2 hover:bg-gray-100 text-gray-700 transition-colors"
+              disabled={currentZoom <= 1}
+              className="p-2 hover:bg-gray-100 text-gray-700 transition-colors disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
               title="Zoom Out (-)"
               aria-label="Zoom out"
             >
               <Minus className="w-4 h-4" />
             </button>
+            <div className="px-2 py-1 text-center text-[10px] font-bold tracking-wide text-gray-500" aria-live="polite">
+              Z {currentZoom.toFixed(0)}
+            </div>
           </div>
 
           {/* Action Buttons: Locate, Reset, Fullscreen, Layers */}

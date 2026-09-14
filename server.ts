@@ -197,7 +197,8 @@ app.get('/api/weather', async (req, res) => {
   const lat = parseFloat(String(req.query.lat || '28.6139'));
   const lon = parseFloat(String(req.query.lon || '77.2090'));
   const locationName = String(req.query.location || req.query.name || req.query.q || 'New Delhi');
-  const countryName = String(req.query.country || 'India');
+  const countryName = String(req.query.country || 'Unknown');
+  const stateName = String(req.query.state || '');
   const cacheKey = `${lat.toFixed(2)},${lon.toFixed(2)}`;
 
   const cached = weatherCache.get(cacheKey);
@@ -318,6 +319,7 @@ app.get('/api/weather', async (req, res) => {
     const weatherData = {
       location: locationName,
       country: countryName,
+      state: stateName || undefined,
       lat,
       lon,
       temperature: Number(temp.toFixed(1)),

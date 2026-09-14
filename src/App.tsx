@@ -37,11 +37,13 @@ export default function App() {
   const [selectedLocation, setSelectedLocation] = useState<{
     name: string;
     country: string;
+    state?: string;
     lat: number;
     lon: number;
   }>({
     name: 'Jaipur, Rajasthan',
     country: 'India',
+    state: 'Rajasthan',
     lat: 26.9124,
     lon: 75.7873
   });
@@ -99,10 +101,17 @@ export default function App() {
   }, [fetchGlobalFeeds, selectedLocation.lat, selectedLocation.lon]);
 
   // Fetch weather and forecast when selectedLocation changes
-  const fetchWeatherData = useCallback(async (lat: number, lon: number, locationName: string) => {
+  const fetchWeatherData = useCallback(async (location: typeof selectedLocation) => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/weather?lat=${lat}&lon=${lon}&name=${encodeURIComponent(locationName)}`);
+      const params = new URLSearchParams({
+        lat: String(location.lat),
+        lon: String(location.lon),
+        name: location.name,
+        country: location.country
+      });
+      if (location.state) params.set('state', location.state);
+      const res = await fetch(`/api/weather?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         const incomingWeather = data.current || data.weather;
@@ -110,8 +119,8 @@ export default function App() {
           // Check if any uploaded dataset contains this location to enrich with uploaded values (Requirement 17)
           const matchedRecord = datasets
             .flatMap(d => d.records || [])
-            .find(r => r.location.toLowerCase() === locationName.toLowerCase() ||
-                      (Math.abs(r.lat - lat) < 0.1 && Math.abs(r.lon - lon) < 0.1));
+            .find(r => r.location.toLowerCase() === location.name.toLowerCase() ||
+                      (Math.abs(r.lat - location.lat) < 0.1 && Math.abs(r.lon - location.lon) < 0.1));
 
           if (matchedRecord) {
             const parentDataset = datasets.find(d => (d.records || []).some(r => r.id === matchedRecord.id));
@@ -147,7 +156,7 @@ export default function App() {
           }
         }
         if (data.forecast) setForecast(data.forecast);
-        if (data.anomaly && !datasets.some(d => d.records?.some(r => r.location.toLowerCase() === locationName.toLowerCase()))) {
+        if (data.anomaly && !datasets.some(d => d.records?.some(r => r.location.toLowerCase() === location.name.toLowerCase()))) {
           setAnomaly(data.anomaly);
         }
         setDataConnected(true);
@@ -160,13 +169,13 @@ export default function App() {
   }, [datasets]);
 
   useEffect(() => {
-    fetchWeatherData(selectedLocation.lat, selectedLocation.lon, selectedLocation.name);
+    fetchWeatherData(selectedLocation);
   }, [selectedLocation, fetchWeatherData]);
 
   // Keep the selected location's weather and nearby hazard context current.
   useEffect(() => {
     const refreshLiveLocationData = () => {
-      fetchWeatherData(selectedLocation.lat, selectedLocation.lon, selectedLocation.name);
+      fetchWeatherData(selectedLocation);
       fetchGlobalFeeds(selectedLocation.lat, selectedLocation.lon);
     };
     const interval = setInterval(refreshLiveLocationData, 5 * 60 * 1000);
@@ -174,7 +183,7 @@ export default function App() {
   }, [fetchGlobalFeeds, fetchWeatherData, selectedLocation]);
 
   // Handle Location Selection from Search or Presets
-  const handleSelectLocation = (loc: { name: string; country: string; lat: number; lon: number }) => {
+  const handleSelectLocation = (loc: { name: string; country: string; state?: string; lat: number; lon: number }) => {
     setSelectedLocation(loc);
     // If user was on another view and clicked a location, return to overview so they see the result immediately
     if (activeTab !== 'overview' && !activeTab.startsWith('intel-')) {
@@ -193,7 +202,7 @@ export default function App() {
 
   const handleManualRefresh = useCallback(() => {
     fetchGlobalFeeds(selectedLocation.lat, selectedLocation.lon);
-    fetchWeatherData(selectedLocation.lat, selectedLocation.lon, selectedLocation.name);
+    fetchWeatherData(selectedLocation);
     handleRefreshDatasets();
   }, [fetchGlobalFeeds, fetchWeatherData, selectedLocation]);
 

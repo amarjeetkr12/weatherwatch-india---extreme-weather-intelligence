@@ -232,6 +232,7 @@ export const defaultWeatherData: WeatherData = {
   country: 'India',
   lat: 26.9124,
   lon: 75.7873,
+  timezone: 'Asia/Kolkata',
   temperature: 34.8,
   apparentTemperature: 36.2,
   condition: 'Hot & Clear',
@@ -241,8 +242,10 @@ export const defaultWeatherData: WeatherData = {
   windDirectionCompass: 'NW',
   rainProbability: 0,
   precipitation: 0.0,
+  rainAmount: 0.0,
   pressure: 1008.4,
   visibility: 10.0,
+  cloudCover: 0,
   uvIndex: 7,
   weatherCode: 1,
   aqi: {

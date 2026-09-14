@@ -4,6 +4,7 @@ export interface WeatherData {
   state?: string;
   lat: number;
   lon: number;
+  timezone: string;
   temperature: number;
   apparentTemperature: number;
   humidity: number;
@@ -12,8 +13,10 @@ export interface WeatherData {
   windDirectionCompass: string;
   rainProbability: number;
   precipitation: number;
+  rainAmount: number;
   pressure: number;
   visibility: number;
+  cloudCover: number;
   uvIndex: number;
   weatherCode: number;
   condition: string;
@@ -41,6 +44,23 @@ export interface WeatherData {
     recordedAt?: string;
   };
   lastUpdated: string;
+}
+
+export interface HourlyForecast {
+  time: string;
+  temperature: number;
+  apparentTemperature: number;
+  humidity: number;
+  precipitation: number;
+  rainAmount: number;
+  rainProbability: number;
+  windSpeed: number;
+  windDirection: number;
+  pressure: number;
+  visibility: number;
+  cloudCover: number;
+  weatherCode: number;
+  condition: string;
 }
 
 export interface UserProfile {

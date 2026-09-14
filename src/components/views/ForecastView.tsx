@@ -18,30 +18,27 @@ import {
   Tooltip,
   CartesianGrid
 } from 'recharts';
-import { ForecastDay, WeatherData } from '../../types/weather';
+import { ForecastDay, HourlyForecast, WeatherData } from '../../types/weather';
 
 interface ForecastViewProps {
   weather: WeatherData;
   forecast: ForecastDay[];
+  hourlyForecast: HourlyForecast[];
 }
 
-export const ForecastView: React.FC<ForecastViewProps> = ({ weather, forecast }) => {
+export const ForecastView: React.FC<ForecastViewProps> = ({ weather, forecast, hourlyForecast }) => {
   const [selectedDayIdx, setSelectedDayIdx] = useState(0);
   const activeDay = forecast[selectedDayIdx] || forecast[0];
 
-  // Synthesize hourly trajectory curve for selected forecast day
-  const hourlyData = Array.from({ length: 8 }, (_, i) => {
-    const hour = i * 3;
-    const hourLabel = `${hour.toString().padStart(2, '0')}:00`;
-    const tempVariation = Math.sin((hour - 6) / 18 * Math.PI) * ((activeDay.maxTemp - activeDay.minTemp) / 2);
-    const hourlyTemp = Number(((activeDay.maxTemp + activeDay.minTemp) / 2 + tempVariation).toFixed(1));
-    return {
-      hour: hourLabel,
-      temp: hourlyTemp,
-      humidity: Math.max(35, Math.min(95, Math.round(75 - tempVariation * 2.5))),
-      rainChance: activeDay.precipitation > 0 ? Math.min(90, Math.round(activeDay.rainProbability + (i % 3) * 10)) : 5
-    };
-  });
+  const selectedDate = activeDay?.date;
+  const hourlyData = hourlyForecast
+    .filter(item => !selectedDate || item.time.startsWith(selectedDate))
+    .map(item => ({
+      hour: new Date(item.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+      temp: item.temperature,
+      humidity: item.humidity,
+      rainChance: item.rainProbability
+    }));
 
   return (
     <div id="forecast-view" className="space-y-4">

@@ -18,7 +18,8 @@ import {
   CycloneHazard,
   TsunamiEvent,
   WeatherDataset,
-  GridCell
+  GridCell,
+  HourlyForecast
 } from './types/weather';
 import {
   defaultWeatherData,
@@ -66,6 +67,7 @@ export default function App() {
   // State for all data slices
   const [weather, setWeather] = useState<WeatherData>(defaultWeatherData);
   const [forecast, setForecast] = useState<ForecastDay[]>(defaultForecast);
+  const [hourlyForecast, setHourlyForecast] = useState<HourlyForecast[]>([]);
   const [anomaly, setAnomaly] = useState<WeatherAnomaly>(defaultAnomaly);
   const [kpis, setKpis] = useState<KPIStats>(defaultKPIStats);
   const [earthquakes, setEarthquakes] = useState<EarthquakeHazard[]>([]);
@@ -73,9 +75,9 @@ export default function App() {
   const [tsunamis, setTsunamis] = useState<TsunamiEvent[]>([]);
   const [datasets, setDatasets] = useState<WeatherDataset[]>(initialDatasets);
   const [gridCells, setGridCells] = useState<GridCell[]>(defaultGridCells);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [dataConnected, setDataConnected] = useState<boolean>(true);
-  const [weatherError, setWeatherError] = useState<string | null>(null);
+  const [weatherError, setWeatherError] = useState<string | null>('Loading live weather...');
 
   // Fetch initial static/global data
   const fetchGlobalFeeds = useCallback(async (lat: number, lon: number) => {
@@ -119,7 +121,9 @@ export default function App() {
   // Fetch weather and forecast when selectedLocation changes
   const fetchWeatherData = useCallback(async (location: typeof selectedLocation) => {
     setIsLoading(true);
-    setWeatherError(null);
+    setWeatherError('Loading live weather...');
+    setForecast([]);
+    setHourlyForecast([]);
     try {
       const params = new URLSearchParams({
         lat: String(location.lat),
@@ -134,56 +138,20 @@ export default function App() {
       }
       const data = await res.json();
       const incomingWeather = data.current || data.weather;
-      if (incomingWeather) {
-          // Check if any uploaded dataset contains this location to enrich with uploaded values (Requirement 17)
-          const matchedRecord = datasets
-            .flatMap(d => d.records || [])
-            .find(r => r.location.toLowerCase() === location.name.toLowerCase() ||
-                      (Math.abs(r.lat - location.lat) < 0.1 && Math.abs(r.lon - location.lon) < 0.1));
-
-          if (matchedRecord) {
-            const parentDataset = datasets.find(d => (d.records || []).some(r => r.id === matchedRecord.id));
-            setWeather({
-              ...incomingWeather,
-              uploadedComparison: {
-                datasetName: parentDataset?.name || 'Uploaded Climatology Dataset',
-                datasetId: parentDataset?.id,
-                tempC: matchedRecord.tempC,
-                rainfallMm: matchedRecord.rainfallMm,
-                windKmh: matchedRecord.windKmh,
-                pressureHpa: matchedRecord.pressureHpa,
-                anomalyType: matchedRecord.anomalyType,
-                riskCategory: matchedRecord.riskCategory,
-                mlScore: matchedRecord.mlScore,
-                notes: matchedRecord.notes,
-                recordedAt: matchedRecord.timestamp
-              }
-            });
-            setAnomaly({
-              type: matchedRecord.anomalyType || (data.anomaly ? data.anomaly.type : 'Observed Regional Variance'),
-              severity: matchedRecord.riskCategory || (data.anomaly ? data.anomaly.severity : 'Moderate'),
-              zScore: (matchedRecord.mlScore * 4 - 2),
-              baselinePeriod: `${parentDataset?.name || 'Uploaded Dataset'} vs 30-Yr Climatology`,
-              confidence: matchedRecord.mlScore,
-              explanation: matchedRecord.notes || `Direct observational record verified from uploaded dataset (${matchedRecord.location}). Combined with live multi-model atmospheric telemetry.`
-            });
-          } else {
-            setWeather(incomingWeather);
-            if (data.anomaly) {
-              setAnomaly(data.anomaly);
-            }
-          }
+      if (!incomingWeather || incomingWeather.lat !== location.lat || incomingWeather.lon !== location.lon) {
+        throw new Error('Weather response coordinates do not match the selected location');
       }
-      if (data.forecast) setForecast(data.forecast);
-      if (data.anomaly && !datasets.some(d => d.records?.some(r => r.location.toLowerCase() === location.name.toLowerCase()))) {
-        setAnomaly(data.anomaly);
-      }
+      setWeather(incomingWeather);
+      setForecast(Array.isArray(data.forecast) ? data.forecast : []);
+      setHourlyForecast(Array.isArray(data.hourly) ? data.hourly : []);
+      if (data.anomaly) setAnomaly(data.anomaly);
+      setWeatherError(null);
       setDataConnected(true);
     } catch (err) {
       console.error('Error fetching live weather:', err);
       try {
         // Use the official provider directly in the browser if Render cannot reach it.
-        const directUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&timezone=auto`;
+        const directUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,visibility,cloud_cover&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,precipitation_probability,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,visibility,cloud_cover&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&forecast_days=8&timezone=auto&timeformat=iso8601`;
         const directRes = await fetch(directUrl);
         if (!directRes.ok) throw new Error(`Direct Open-Meteo HTTP ${directRes.status}`);
         const direct = await directRes.json();
@@ -191,14 +159,14 @@ export default function App() {
         const daily = direct.daily || {};
         if (!current || typeof current.temperature_2m !== 'number') throw new Error('Direct provider returned no current observation');
         const codes = daily.weather_code || [];
-        const forecastFallback: ForecastDay[] = (daily.time || []).slice(0, 8).map((date: string, index: number) => ({
+        const forecastFallback: ForecastDay[] = (daily.time || []).slice(0, 8).filter((_: string, index: number) => [daily.temperature_2m_max?.[index], daily.temperature_2m_min?.[index], daily.precipitation_sum?.[index], daily.precipitation_probability_max?.[index], daily.wind_speed_10m_max?.[index], daily.weather_code?.[index]].every((value: unknown) => typeof value === 'number')).map((date: string, index: number) => ({
           dayName: index === 0 ? 'Today' : `+${index} Day`,
           date,
           maxTemp: Number(daily.temperature_2m_max[index].toFixed(1)),
           minTemp: Number(daily.temperature_2m_min[index].toFixed(1)),
-          precipitation: Number((daily.precipitation_sum[index] || 0).toFixed(1)),
-          rainProbability: daily.precipitation_probability_max[index] ?? 0,
-          windSpeed: Number((daily.wind_speed_10m_max[index] || 0).toFixed(1)),
+          precipitation: Number(daily.precipitation_sum[index].toFixed(1)),
+          rainProbability: daily.precipitation_probability_max[index],
+          windSpeed: Number(daily.wind_speed_10m_max[index].toFixed(1)),
           condition: weatherConditionFromCode(codes[index] ?? 0),
           weatherCode: codes[index] ?? 0,
           anomalyScore: 0,
@@ -210,6 +178,7 @@ export default function App() {
           state: location.state,
           lat: location.lat,
           lon: location.lon,
+          timezone: direct.timezone,
           temperature: Number(current.temperature_2m.toFixed(1)),
           apparentTemperature: Number(current.apparent_temperature.toFixed(1)),
           humidity: Math.round(current.relative_humidity_2m),
@@ -219,14 +188,33 @@ export default function App() {
           rainProbability: forecastFallback[0]?.rainProbability ?? 0,
           precipitation: Number(current.precipitation.toFixed(1)),
           pressure: Number(current.surface_pressure.toFixed(1)),
-          visibility: 0,
+          rainAmount: Number(current.rain.toFixed(1)),
+          visibility: Number((current.visibility / 1000).toFixed(1)),
+          cloudCover: current.cloud_cover,
           uvIndex: 0,
           weatherCode: current.weather_code,
           condition: weatherConditionFromCode(current.weather_code),
           source: 'OPEN-METEO',
-          lastUpdated: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' })
+          lastUpdated: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'medium', timeZone: direct.timezone })
         });
         setForecast(forecastFallback);
+        const hourly = direct.hourly || {};
+        setHourlyForecast((hourly.time || []).map((time: string, index: number) => ({
+          time,
+          temperature: Number(hourly.temperature_2m[index].toFixed(1)),
+          apparentTemperature: Number(hourly.apparent_temperature[index].toFixed(1)),
+          humidity: Math.round(hourly.relative_humidity_2m[index]),
+          precipitation: Number(hourly.precipitation[index].toFixed(1)),
+          rainAmount: Number(hourly.rain[index].toFixed(1)),
+          rainProbability: hourly.precipitation_probability[index],
+          windSpeed: Number(hourly.wind_speed_10m[index].toFixed(1)),
+          windDirection: hourly.wind_direction_10m[index],
+          pressure: Number(hourly.surface_pressure[index].toFixed(1)),
+          visibility: Number((hourly.visibility[index] / 1000).toFixed(1)),
+          cloudCover: hourly.cloud_cover[index],
+          weatherCode: hourly.weather_code[index],
+          condition: weatherConditionFromCode(hourly.weather_code[index])
+        })).filter((item: HourlyForecast) => Number.isFinite(item.temperature)));
         setWeatherError(null);
         setDataConnected(true);
       } catch (directError) {
@@ -237,7 +225,7 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [datasets]);
+  }, []);
 
   useEffect(() => {
     fetchWeatherData(selectedLocation);
@@ -255,6 +243,9 @@ export default function App() {
 
   // Handle Location Selection from Search or Presets
   const handleSelectLocation = (loc: { name: string; country: string; state?: string; lat: number; lon: number }) => {
+    setWeatherError('Loading live weather...');
+    setForecast([]);
+    setHourlyForecast([]);
     setSelectedLocation(loc);
     // If user was on another view and clicked a location, return to overview so they see the result immediately
     if (activeTab !== 'overview' && !activeTab.startsWith('intel-')) {
@@ -283,6 +274,7 @@ export default function App() {
       <Header
         currentLocation={selectedLocation.name}
         lastUpdated={weather.lastUpdated}
+        timezone={weather.timezone}
         onSelectLocation={handleSelectLocation}
         dataConnected={dataConnected}
         isLoading={isLoading}
@@ -358,7 +350,7 @@ export default function App() {
 
           {/* TAB: FORECAST (7-Day Multi-Model Trajectory) */}
           {activeTab === 'forecast' && (
-            <ForecastView weather={weather} forecast={forecast} />
+            <ForecastView weather={weather} forecast={forecast} hourlyForecast={hourlyForecast} />
           )}
 
           {/* TAB: ALERTS (Validated Meteorological & Hazard Advisories) */}

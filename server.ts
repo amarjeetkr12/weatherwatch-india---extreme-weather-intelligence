@@ -25,10 +25,6 @@ let datasetVersionHistory: Array<{
   { id: 'ver-02', datasetId: 'ds-india-sample-02', version: 'v1.8', timestamp: '2026-09-13 14:15:00 UTC', action: 'Created', summary: 'IMD regional meteorological benchmark set', recordCount: 8 }
 ];
 
-// In-memory weather cache: key -> { data, timestamp }
-const weatherCache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache
-
 // Helper for weather condition text from WMO weather code
 function getWeatherCondition(code: number): string {
   if (code === 0) return 'Clear Sky';
@@ -199,18 +195,11 @@ app.get('/api/weather', async (req, res) => {
   const locationName = String(req.query.location || req.query.name || req.query.q || 'New Delhi');
   const countryName = String(req.query.country || 'Unknown');
   const stateName = String(req.query.state || '');
-  const cacheKey = `${lat.toFixed(2)},${lon.toFixed(2)}`;
-
-  const cached = weatherCache.get(cacheKey);
-  const now = Date.now();
-
-  // If cache is fresh, return immediately
-  if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
-    return res.json(cached.data);
-  }
-
   try {
-    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&timezone=auto`;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+      return res.status(400).json({ error: 'Valid latitude and longitude are required' });
+    }
+    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,visibility,cloud_cover&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,precipitation_probability,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,visibility,cloud_cover&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&forecast_days=8&timezone=auto&timeformat=iso8601`;
     const aqiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm10,pm2_5,european_aqi`;
 
     const [weatherRes, aqiRes] = await Promise.all([
@@ -234,7 +223,7 @@ app.get('/api/weather', async (req, res) => {
     const requiredCurrentFields = [
       'temperature_2m', 'apparent_temperature', 'relative_humidity_2m',
       'wind_speed_10m', 'wind_direction_10m', 'precipitation',
-      'surface_pressure', 'weather_code'
+      'rain', 'surface_pressure', 'weather_code', 'visibility', 'cloud_cover'
     ];
     if (requiredCurrentFields.some(field => typeof current[field] !== 'number')) {
       throw new Error('Open-Meteo response is missing current observations');
@@ -251,10 +240,10 @@ app.get('/api/weather', async (req, res) => {
 
     // Parse AQI
     let aqiObj: WeatherData['aqi'] = undefined;
-    if (aqiJson && aqiJson.current) {
-      const pm25 = aqiJson.current.pm2_5 ?? 32;
-      const pm10 = aqiJson.current.pm10 ?? 64;
-      const val = Math.round(pm25 * 2.2);
+    if (aqiJson && aqiJson.current && typeof aqiJson.current.pm2_5 === 'number' && typeof aqiJson.current.pm10 === 'number' && typeof aqiJson.current.european_aqi === 'number') {
+      const pm25 = aqiJson.current.pm2_5;
+      const pm10 = aqiJson.current.pm10;
+      const val = Math.round(aqiJson.current.european_aqi);
       let cat: 'Good' | 'Moderate' | 'Unhealthy for Sensitive' | 'Unhealthy' | 'Very Unhealthy' | 'Hazardous' = 'Moderate';
       if (val <= 50) cat = 'Good';
       else if (val <= 100) cat = 'Moderate';
@@ -282,9 +271,10 @@ app.get('/api/weather', async (req, res) => {
     const codes = daily.weather_code || [];
 
     for (let i = 0; i < Math.min(8, times.length); i++) {
-      const maxT = maxTemps[i] ?? (temp + (i % 2 === 0 ? 1.5 : -1.0));
-      const minT = minTemps[i] ?? (temp - 6);
-      const dayPrecip = precipSums[i] ?? (i === 2 ? 4.5 : 0.0);
+      if (typeof maxTemps[i] !== 'number' || typeof minTemps[i] !== 'number' || typeof precipSums[i] !== 'number' || typeof rainProbs[i] !== 'number' || typeof windMaxs[i] !== 'number' || typeof codes[i] !== 'number') continue;
+      const maxT = maxTemps[i];
+      const minT = minTemps[i];
+      const dayPrecip = precipSums[i];
       const code = codes[i] ?? weatherCode;
 
       forecastDays.push({
@@ -293,14 +283,36 @@ app.get('/api/weather', async (req, res) => {
         maxTemp: Number(maxT.toFixed(1)),
         minTemp: Number(minT.toFixed(1)),
         precipitation: Number(dayPrecip.toFixed(1)),
-        rainProbability: rainProbs[i] ?? (dayPrecip > 0 ? 65 : 10),
-        windSpeed: Number((windMaxs[i] ?? windSpeed).toFixed(1)),
+        rainProbability: rainProbs[i],
+        windSpeed: Number(windMaxs[i].toFixed(1)),
         condition: getWeatherCondition(code),
         weatherCode: code,
         anomalyScore: Number((0.2 + (i === 1 ? 0.4 : 0.1)).toFixed(2)),
         riskLevel: dayPrecip > 30 ? 'High' : (maxT > 38 ? 'High' : 'Low')
       });
     }
+
+    const hourly = weatherJson.hourly || {};
+    const hourlyForecast = (hourly.time || []).map((time: string, index: number) => {
+      const values = [hourly.temperature_2m, hourly.apparent_temperature, hourly.relative_humidity_2m, hourly.precipitation, hourly.rain, hourly.precipitation_probability, hourly.weather_code, hourly.surface_pressure, hourly.wind_speed_10m, hourly.wind_direction_10m, hourly.visibility, hourly.cloud_cover];
+      if (values.some(series => typeof series?.[index] !== 'number')) return null;
+      return {
+        time,
+        temperature: Number(hourly.temperature_2m[index].toFixed(1)),
+        apparentTemperature: Number(hourly.apparent_temperature[index].toFixed(1)),
+        humidity: Math.round(hourly.relative_humidity_2m[index]),
+        precipitation: Number(hourly.precipitation[index].toFixed(1)),
+        rainAmount: Number(hourly.rain[index].toFixed(1)),
+        rainProbability: hourly.precipitation_probability[index],
+        windSpeed: Number(hourly.wind_speed_10m[index].toFixed(1)),
+        windDirection: hourly.wind_direction_10m[index],
+        pressure: Number(hourly.surface_pressure[index].toFixed(1)),
+        visibility: Number((hourly.visibility[index] / 1000).toFixed(1)),
+        cloudCover: hourly.cloud_cover[index],
+        weatherCode: hourly.weather_code[index],
+        condition: getWeatherCondition(hourly.weather_code[index])
+      };
+    }).filter(Boolean);
 
     // Historical Climatological baseline calculation
     const baselineTemp = 24.5;
@@ -323,6 +335,7 @@ app.get('/api/weather', async (req, res) => {
       state: stateName || undefined,
       lat,
       lon,
+      timezone: weatherJson.timezone,
       temperature: Number(temp.toFixed(1)),
       apparentTemperature: Number(apparentTemp.toFixed(1)),
       humidity: Math.round(humidity),
@@ -331,33 +344,28 @@ app.get('/api/weather', async (req, res) => {
       windDirectionCompass: getWindCompass(windDir),
       rainProbability: forecastDays[0]?.rainProbability ?? 0,
       precipitation: Number(precip.toFixed(1)),
+      rainAmount: Number(current.rain.toFixed(1)),
       pressure: Number(pressure.toFixed(1)),
-      visibility: 10.0,
-      uvIndex: 4.5,
+      visibility: Number((current.visibility / 1000).toFixed(1)),
+      cloudCover: current.cloud_cover,
+      uvIndex: 0,
       weatherCode,
       condition,
       aqi: aqiObj,
       source: 'OPEN-METEO',
-      lastUpdated: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' })
+      lastUpdated: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'medium', timeZone: weatherJson.timezone })
     };
 
     const result = {
       weather: weatherData,
       current: weatherData,
       forecast: forecastDays,
+      hourly: hourlyForecast,
       anomaly: anomalyIntelligence
     };
-
-    weatherCache.set(cacheKey, { data: result, timestamp: now });
     res.json(result);
   } catch (error: any) {
     console.error('Weather fetch error:', error.message);
-    if (cached) {
-      return res.json({
-        ...cached.data,
-        cachedNotice: `Showing last valid cached data from ${new Date(cached.timestamp).toLocaleTimeString()}`
-      });
-    }
     return res.status(503).json({
       error: 'Live weather provider unavailable',
       message: 'No cached observation is available for this location. Try again shortly.'
@@ -700,7 +708,6 @@ app.get('/api/diagnostics', (req, res) => {
     },
     systemMetrics: {
       memoryUsedMb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-      activeCacheKeys: weatherCache.size,
       serverUptimeSeconds: Math.round(process.uptime())
     }
   });

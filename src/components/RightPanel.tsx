@@ -314,7 +314,11 @@ export const RightPanel: React.FC<RightPanelProps> = ({
             <span className="font-semibold text-gray-900">{weather.rainProbability}%</span>
           </div>
           <div className="flex justify-between items-center text-gray-600">
-            <span className="text-gray-500">Precipitation</span>
+            <span className="text-gray-500">Rainfall (last hour)</span>
+            <span className="font-semibold text-gray-900">{weather.rainAmount} mm</span>
+          </div>
+          <div className="flex justify-between items-center text-gray-600">
+            <span className="text-gray-500">Total Precipitation</span>
             <span className="font-semibold text-gray-900">{weather.precipitation} mm</span>
           </div>
           <div className="flex justify-between items-center text-gray-600">
@@ -326,9 +330,13 @@ export const RightPanel: React.FC<RightPanelProps> = ({
             <span className="font-semibold text-gray-900">{weather.visibility} km</span>
           </div>
           <div className="flex justify-between items-center text-gray-600">
+            <span className="text-gray-500">Cloud Cover</span>
+            <span className="font-semibold text-gray-900">{weather.cloudCover}%</span>
+          </div>
+          <div className="flex justify-between items-center text-gray-600">
             <span className="text-gray-500">Air Quality (AQI)</span>
             <span className="font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
-              {weather.aqi ? `${weather.aqi.category} (${weather.aqi.value})` : 'Moderate (73)'}
+              {weather.aqi ? `${weather.aqi.category} (${weather.aqi.value})` : 'Unavailable'}
             </span>
           </div>
         </div>}

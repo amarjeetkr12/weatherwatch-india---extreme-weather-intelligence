@@ -8,6 +8,7 @@ interface HeaderProps {
   currentLocation?: string;
   onSelectLocation: (loc: { name: string; country: string; state?: string; lat: number; lon: number }) => void;
   lastUpdated?: string;
+  timezone?: string;
   nextUpdate?: string;
   isLoading?: boolean;
   dataConnected?: boolean;
@@ -37,6 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
   currentLocation = 'Jaipur, Rajasthan',
   onSelectLocation,
   lastUpdated = '14 Sep 2026, 14:40 IST',
+  timezone = 'Asia/Kolkata',
   nextUpdate = '15:10 IST',
   isLoading = false,
   dataConnected = true,
@@ -100,14 +102,14 @@ export const Header: React.FC<HeaderProps> = ({
     const updateTime = () => {
       const now = new Date();
       const datePart = new Intl.DateTimeFormat('en-IN', {
-        timeZone: 'Asia/Kolkata',
+        timeZone: timezone,
         weekday: 'short',
         day: '2-digit',
         month: 'short',
         year: 'numeric'
       }).format(now);
       const timePart = new Intl.DateTimeFormat('en-IN', {
-        timeZone: 'Asia/Kolkata',
+        timeZone: timezone,
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',

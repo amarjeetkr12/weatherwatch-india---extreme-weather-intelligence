@@ -76,11 +76,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside
       id="main-sidebar"
-      className="w-56 shrink-0 bg-white border-r border-gray-200 flex flex-col justify-between py-3 h-[calc(100vh-53px)] sticky top-[53px] overflow-y-auto select-none"
+      className="w-full lg:w-56 shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-gray-200 flex lg:flex-col justify-between py-2 lg:py-3 h-auto lg:h-[calc(100vh-53px)] lg:sticky lg:top-[53px] overflow-hidden lg:overflow-y-auto select-none"
     >
       <div className="space-y-4">
         {/* Main Navigation matching Reference Screenshot */}
-        <div className="px-2 space-y-1">
+        <div className="px-2 flex lg:block gap-1 overflow-x-auto pb-1 lg:pb-0">
           {primaryNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -89,7 +89,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 key={item.id}
                 id={`sidebar-nav-${item.id}`}
                 onClick={() => handleTabSelect(item.id)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                className={`w-auto lg:w-full shrink-0 flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
                   isActive
                     ? 'bg-blue-50 text-blue-600 shadow-2xs'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -124,7 +124,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </span>
           </div>
 
-          <div className="space-y-0.5">
+          <div className="flex lg:block gap-1 space-y-0.5 overflow-x-auto pb-1 lg:pb-0">
             {intelligenceSections.map((sec) => {
               const SecIcon = sec.icon;
               const isActive = activeTab === sec.id;
@@ -133,7 +133,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   key={sec.id}
                   id={`sidebar-intel-${sec.id}`}
                   onClick={() => handleTabSelect(sec.id)}
-                  className={`w-full flex items-center space-x-2 px-3 py-1.5 rounded-md text-[11px] font-medium transition-colors text-left ${
+                  className={`w-auto lg:w-full shrink-0 flex items-center space-x-2 px-3 py-1.5 rounded-md text-[11px] font-medium transition-colors text-left ${
                     isActive
                       ? 'bg-blue-50/80 text-blue-600 font-semibold'
                       : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'

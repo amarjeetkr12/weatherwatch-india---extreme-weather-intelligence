@@ -290,7 +290,7 @@ export default function App() {
       />
 
       {/* Main Body Layout: Sidebar + Main Area */}
-      <div className="flex-1 max-w-[1720px] w-full mx-auto p-3 sm:p-4 lg:p-5 flex flex-col lg:flex-row gap-4">
+      <div className="flex-1 max-w-[1720px] w-full mx-auto p-2 sm:p-3 lg:p-5 flex flex-col lg:flex-row gap-3 lg:gap-4">
         {/* 2. LEFT SIDEBAR NAVIGATION */}
         <Sidebar
           activeTab={activeTab}

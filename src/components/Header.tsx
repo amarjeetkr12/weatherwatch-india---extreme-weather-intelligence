@@ -194,7 +194,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header id="main-header" className="bg-white border-b border-gray-200 px-4 py-2.5 flex items-center justify-between sticky top-0 z-50 shadow-xs">
+    <header id="main-header" className="bg-white border-b border-gray-200 px-3 sm:px-4 py-2.5 flex flex-wrap items-center gap-2 sm:gap-3 sticky top-0 z-50 shadow-xs">
       {/* Left: Brand Identity matching reference screenshot */}
       <div className="flex items-center space-x-3 shrink-0">
         <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white shadow-sm">
@@ -213,7 +213,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Center: Large Location Search Box */}
-      <div ref={searchRef} className="relative w-full max-w-xl mx-4">
+      <div ref={searchRef} className="relative order-3 basis-full w-full max-w-none mx-0 lg:order-none lg:basis-auto lg:max-w-xl lg:mx-4 lg:flex-1">
         <form onSubmit={handleFormSubmit} className="relative">
           <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
@@ -293,7 +293,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Right: Date/Time, Live Status, Notifications, User Profile */}
-      <div className="flex items-center space-x-3 shrink-0 text-sm">
+      <div className="ml-auto flex items-center space-x-2 sm:space-x-3 shrink-0 text-sm">
         {/* Date / Time */}
         <div className="hidden lg:flex items-center gap-2 text-xs font-medium text-gray-600" title="Live India Standard Time">
           <CalendarDays className="w-3.5 h-3.5 text-blue-500" />

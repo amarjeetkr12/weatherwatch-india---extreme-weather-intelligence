@@ -842,7 +842,7 @@ export const WeatherMap: React.FC<WeatherMapProps> = ({
     <div
       ref={mapWrapperRef}
       className={`bg-white border border-gray-200 rounded-xl overflow-hidden shadow-2xs flex flex-col flex-1 ${
-        isFullscreen ? 'fixed inset-0 z-50 rounded-none border-0' : 'min-h-[580px]'
+        isFullscreen ? 'fixed inset-0 z-50 rounded-none border-0' : 'min-h-[480px] sm:min-h-[580px]'
       }`}
     >
       {/* 1. TOP MAP CONTROL BAR - Matching User Layout Reference */}
@@ -918,7 +918,7 @@ export const WeatherMap: React.FC<WeatherMapProps> = ({
       </div>
 
       {/* 2. MAIN MAP CANVAS & FLOATING LEAFLET GIS CONTROLS */}
-      <div className="relative w-full flex-1 min-h-[500px]">
+      <div className="relative w-full flex-1 min-h-[400px] sm:min-h-[500px]">
         <div ref={mapContainerRef} className="absolute inset-0 w-full h-full z-10" />
 
         {/* FLOATING CONTROL 1: TOP-LEFT GLOBAL / INDIA TOGGLE & BASEMAP SWITCHER */}

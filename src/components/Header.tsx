@@ -113,7 +113,8 @@ export const Header: React.FC<HeaderProps> = ({
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
-        hour12: false
+        hour12: false,
+        timeZoneName: 'short'
       }).format(now);
       setCurrentDate(datePart);
       setCurrentTime(timePart);
@@ -297,12 +298,16 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Right: Date/Time, Live Status, Notifications, User Profile */}
       <div className="ml-auto flex items-center space-x-2 sm:space-x-3 shrink-0 text-sm">
         {/* Date / Time */}
-        <div className="hidden lg:flex items-center gap-2 text-xs font-medium text-gray-600" title="Live India Standard Time">
-          <CalendarDays className="w-3.5 h-3.5 text-blue-500" />
-          <span className="whitespace-nowrap">{currentDate || 'Loading date...'}</span>
+        <div className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs font-medium text-gray-600" title={`Local time: ${timezone}`}>
+          <div className="flex items-center gap-1 whitespace-nowrap">
+            <CalendarDays className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-500 shrink-0" />
+            <span>{currentDate || 'Loading date...'}</span>
+          </div>
           <span className="h-4 w-px bg-gray-200" aria-hidden="true" />
-          <Clock className="w-3.5 h-3.5 text-gray-400" />
-          <span className="font-mono tabular-nums whitespace-nowrap">{currentTime || '--:--:--'} IST</span>
+          <div className="flex items-center gap-1 whitespace-nowrap">
+            <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-400 shrink-0" />
+            <span className="font-mono tabular-nums">{currentTime || '--:--:--'}</span>
+          </div>
         </div>
 
         {/* Live Data Status Indicator with Tooltip & Quick Refresh */}

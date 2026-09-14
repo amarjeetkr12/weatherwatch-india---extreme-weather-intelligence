@@ -60,6 +60,7 @@ export default function App() {
   const [gridCells, setGridCells] = useState<GridCell[]>(defaultGridCells);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [dataConnected, setDataConnected] = useState<boolean>(true);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
 
   // Fetch initial static/global data
   const fetchGlobalFeeds = useCallback(async (lat: number, lon: number) => {
@@ -103,6 +104,7 @@ export default function App() {
   // Fetch weather and forecast when selectedLocation changes
   const fetchWeatherData = useCallback(async (location: typeof selectedLocation) => {
     setIsLoading(true);
+    setWeatherError(null);
     try {
       const params = new URLSearchParams({
         lat: String(location.lat),
@@ -112,10 +114,12 @@ export default function App() {
       });
       if (location.state) params.set('state', location.state);
       const res = await fetch(`/api/weather?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        const incomingWeather = data.current || data.weather;
-        if (incomingWeather) {
+      if (!res.ok) {
+        throw new Error(`Live weather provider returned HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const incomingWeather = data.current || data.weather;
+      if (incomingWeather) {
           // Check if any uploaded dataset contains this location to enrich with uploaded values (Requirement 17)
           const matchedRecord = datasets
             .flatMap(d => d.records || [])
@@ -154,15 +158,16 @@ export default function App() {
               setAnomaly(data.anomaly);
             }
           }
-        }
-        if (data.forecast) setForecast(data.forecast);
-        if (data.anomaly && !datasets.some(d => d.records?.some(r => r.location.toLowerCase() === location.name.toLowerCase()))) {
-          setAnomaly(data.anomaly);
-        }
-        setDataConnected(true);
       }
+      if (data.forecast) setForecast(data.forecast);
+      if (data.anomaly && !datasets.some(d => d.records?.some(r => r.location.toLowerCase() === location.name.toLowerCase()))) {
+        setAnomaly(data.anomaly);
+      }
+      setDataConnected(true);
     } catch (err) {
       console.error('Error fetching live weather:', err);
+      setWeatherError('Live weather is temporarily unavailable. Retrying automatically.');
+      setDataConnected(false);
     } finally {
       setIsLoading(false);
     }
@@ -265,6 +270,7 @@ export default function App() {
                   cyclones={cyclones}
                   tsunamis={tsunamis}
                   isLoading={isLoading}
+                  weatherError={weatherError}
                   onSelectLocation={handleSelectLocation}
                 />
               </div>

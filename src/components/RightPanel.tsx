@@ -46,6 +46,7 @@ interface RightPanelProps {
   cyclones: CycloneHazard[];
   tsunamis: TsunamiEvent[];
   isLoading?: boolean;
+  weatherError?: string | null;
   onSelectLocation?: (loc: { name: string; country: string; state?: string; lat: number; lon: number }) => void;
 }
 
@@ -63,6 +64,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
   cyclones,
   tsunamis,
   isLoading,
+  weatherError,
   onSelectLocation
 }) => {
   const [whyRiskOpen, setWhyRiskOpen] = useState(false);
@@ -225,6 +227,13 @@ export const RightPanel: React.FC<RightPanelProps> = ({
           </span>
         </div>
 
+        {weatherError && (
+          <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{weatherError} Cached values are hidden until a fresh observation arrives.</span>
+          </div>
+        )}
+
         {/* Tracked Locations List */}
         {trackedLocations.length > 0 && (
           <div className="mb-3 pb-2.5 border-b border-gray-100 flex flex-wrap items-center gap-1.5 text-xs">
@@ -268,10 +277,10 @@ export const RightPanel: React.FC<RightPanelProps> = ({
         <div className="flex items-baseline justify-between mb-4">
           <div>
             <div className="text-4xl font-extrabold text-gray-900 tracking-tight">
-              {weather.temperature.toFixed(1)}°C
+              {weatherError ? '--' : `${weather.temperature.toFixed(1)}°C`}
             </div>
             <div className="text-xs font-semibold text-gray-600 mt-0.5">
-              {weather.condition}
+              {weatherError ? 'Awaiting live observation' : weather.condition}
             </div>
           </div>
           <div className="text-right">
@@ -279,13 +288,13 @@ export const RightPanel: React.FC<RightPanelProps> = ({
               {anomaly.risk} Risk
             </span>
             <div className="text-[10px] text-gray-400 mt-1">
-              Updated: {weather.lastUpdated}
+              {weatherError ? 'Not available' : `Updated: ${weather.lastUpdated}`}
             </div>
           </div>
         </div>
 
         {/* Live Weather Metrics Grid */}
-        <div className="grid grid-cols-2 gap-y-2.5 gap-x-3 text-xs border-t border-gray-100 pt-3">
+        {!weatherError && <div className="grid grid-cols-2 gap-y-2.5 gap-x-3 text-xs border-t border-gray-100 pt-3">
           <div className="flex justify-between items-center text-gray-600">
             <span className="text-gray-500">Feels Like</span>
             <span className="font-semibold text-gray-900">{weather.apparentTemperature.toFixed(0)}°C</span>
@@ -322,7 +331,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
               {weather.aqi ? `${weather.aqi.category} (${weather.aqi.value})` : 'Moderate (73)'}
             </span>
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* 1.1 LIVE + EXCEL INTEGRATED COMPARISON CARD (Requirement 15) */}

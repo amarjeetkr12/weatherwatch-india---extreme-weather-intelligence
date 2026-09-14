@@ -214,8 +214,8 @@ app.get('/api/weather', async (req, res) => {
     const aqiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm10,pm2_5,european_aqi`;
 
     const [weatherRes, aqiRes] = await Promise.all([
-      fetch(weatherUrl, { signal: AbortSignal.timeout(5000) }),
-      fetch(aqiUrl, { signal: AbortSignal.timeout(3500) }).catch(() => null)
+      fetch(weatherUrl, { signal: AbortSignal.timeout(12000) }),
+      fetch(aqiUrl, { signal: AbortSignal.timeout(8000) }).catch(() => null)
     ]);
 
     if (!weatherRes.ok) {

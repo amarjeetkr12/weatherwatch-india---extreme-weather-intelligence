@@ -29,6 +29,21 @@ import {
   initialDatasets
 } from './data/defaultData';
 
+function weatherConditionFromCode(code: number): string {
+  if (code === 0) return 'Clear Sky';
+  if (code <= 3) return code === 1 ? 'Mainly Clear' : code === 2 ? 'Partly Cloudy' : 'Overcast';
+  if (code <= 48) return 'Fog & Depositing Rime';
+  if (code <= 55) return 'Drizzle';
+  if (code <= 65 || (code >= 80 && code <= 82)) return 'Rain Showers';
+  if (code <= 77) return 'Snow Fall';
+  return 'Thunderstorm with Hail';
+}
+
+function windDirectionLabel(degrees: number): string {
+  const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+  return directions[Math.round(degrees / 22.5) % 16];
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [activeMapLayer, setActiveMapLayer] = useState<'temp' | 'rain' | 'wind' | 'hazard'>('temp');
@@ -166,8 +181,59 @@ export default function App() {
       setDataConnected(true);
     } catch (err) {
       console.error('Error fetching live weather:', err);
-      setWeatherError('Live weather is temporarily unavailable. Retrying automatically.');
-      setDataConnected(false);
+      try {
+        // Use the official provider directly in the browser if Render cannot reach it.
+        const directUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&timezone=auto`;
+        const directRes = await fetch(directUrl);
+        if (!directRes.ok) throw new Error(`Direct Open-Meteo HTTP ${directRes.status}`);
+        const direct = await directRes.json();
+        const current = direct.current;
+        const daily = direct.daily || {};
+        if (!current || typeof current.temperature_2m !== 'number') throw new Error('Direct provider returned no current observation');
+        const codes = daily.weather_code || [];
+        const forecastFallback: ForecastDay[] = (daily.time || []).slice(0, 8).map((date: string, index: number) => ({
+          dayName: index === 0 ? 'Today' : `+${index} Day`,
+          date,
+          maxTemp: Number(daily.temperature_2m_max[index].toFixed(1)),
+          minTemp: Number(daily.temperature_2m_min[index].toFixed(1)),
+          precipitation: Number((daily.precipitation_sum[index] || 0).toFixed(1)),
+          rainProbability: daily.precipitation_probability_max[index] ?? 0,
+          windSpeed: Number((daily.wind_speed_10m_max[index] || 0).toFixed(1)),
+          condition: weatherConditionFromCode(codes[index] ?? 0),
+          weatherCode: codes[index] ?? 0,
+          anomalyScore: 0,
+          riskLevel: 'Low'
+        }));
+        setWeather({
+          location: location.name,
+          country: location.country,
+          state: location.state,
+          lat: location.lat,
+          lon: location.lon,
+          temperature: Number(current.temperature_2m.toFixed(1)),
+          apparentTemperature: Number(current.apparent_temperature.toFixed(1)),
+          humidity: Math.round(current.relative_humidity_2m),
+          windSpeed: Number(current.wind_speed_10m.toFixed(1)),
+          windDirection: current.wind_direction_10m,
+          windDirectionCompass: windDirectionLabel(current.wind_direction_10m),
+          rainProbability: forecastFallback[0]?.rainProbability ?? 0,
+          precipitation: Number(current.precipitation.toFixed(1)),
+          pressure: Number(current.surface_pressure.toFixed(1)),
+          visibility: 0,
+          uvIndex: 0,
+          weatherCode: current.weather_code,
+          condition: weatherConditionFromCode(current.weather_code),
+          source: 'OPEN-METEO',
+          lastUpdated: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' })
+        });
+        setForecast(forecastFallback);
+        setWeatherError(null);
+        setDataConnected(true);
+      } catch (directError) {
+        console.error('Direct Open-Meteo fallback failed:', directError);
+        setWeatherError('Live weather is temporarily unavailable. Retrying automatically.');
+        setDataConnected(false);
+      }
     } finally {
       setIsLoading(false);
     }

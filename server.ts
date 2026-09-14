@@ -231,14 +231,22 @@ app.get('/api/weather', async (req, res) => {
     const current = weatherJson.current || {};
     const daily = weatherJson.daily || {};
 
-    const temp = current.temperature_2m ?? 10.6;
-    const apparentTemp = current.apparent_temperature ?? 14.0;
-    const humidity = current.relative_humidity_2m ?? 55;
-    const windSpeed = current.wind_speed_10m ?? 14.0;
-    const windDir = current.wind_direction_10m ?? 315;
-    const precip = current.precipitation ?? 0.0;
-    const pressure = current.surface_pressure ?? 1013.2;
-    const weatherCode = current.weather_code ?? 2;
+    const requiredCurrentFields = [
+      'temperature_2m', 'apparent_temperature', 'relative_humidity_2m',
+      'wind_speed_10m', 'wind_direction_10m', 'precipitation',
+      'surface_pressure', 'weather_code'
+    ];
+    if (requiredCurrentFields.some(field => typeof current[field] !== 'number')) {
+      throw new Error('Open-Meteo response is missing current observations');
+    }
+    const temp = current.temperature_2m;
+    const apparentTemp = current.apparent_temperature;
+    const humidity = current.relative_humidity_2m;
+    const windSpeed = current.wind_speed_10m;
+    const windDir = current.wind_direction_10m;
+    const precip = current.precipitation;
+    const pressure = current.surface_pressure;
+    const weatherCode = current.weather_code;
     const condition = getWeatherCondition(weatherCode);
 
     // Parse AQI
@@ -259,13 +267,6 @@ app.get('/api/weather', async (req, res) => {
         category: cat,
         pm25,
         pm10
-      };
-    } else {
-      aqiObj = {
-        value: 73,
-        category: 'Moderate',
-        pm25: 35.4,
-        pm10: 71.2
       };
     }
 

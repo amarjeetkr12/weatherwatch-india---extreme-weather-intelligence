@@ -5,7 +5,7 @@ import { DEFAULT_DATASETS, GLOBAL_GRID_NODES, OBSERVED_CYCLONES, TSUNAMI_EVENTS,
 import { WeatherDataset, WeatherData, ForecastDay, WeatherAnomaly, EarthquakeHazard } from './src/types/weather';
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));

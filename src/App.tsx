@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { KPICards } from './components/KPICards';
@@ -22,13 +22,37 @@ import {
   HourlyForecast
 } from './types/weather';
 import {
-  defaultWeatherData,
-  defaultForecast,
   defaultAnomaly,
   defaultKPIStats,
   defaultGridCells,
   initialDatasets
 } from './data/defaultData';
+
+const unavailableWeather: WeatherData = {
+  location: 'Jaipur, Rajasthan',
+  country: 'India',
+  state: 'Rajasthan',
+  lat: 26.9124,
+  lon: 75.7873,
+  timezone: 'Asia/Kolkata',
+  temperature: Number.NaN,
+  apparentTemperature: Number.NaN,
+  humidity: Number.NaN,
+  windSpeed: Number.NaN,
+  windDirection: Number.NaN,
+  windDirectionCompass: '',
+  rainProbability: Number.NaN,
+  precipitation: Number.NaN,
+  rainAmount: Number.NaN,
+  pressure: Number.NaN,
+  visibility: Number.NaN,
+  cloudCover: Number.NaN,
+  uvIndex: Number.NaN,
+  weatherCode: Number.NaN,
+  condition: '',
+  source: 'OPEN-METEO',
+  lastUpdated: ''
+};
 
 function weatherConditionFromCode(code: number): string {
   if (code === 0) return 'Clear Sky';
@@ -65,8 +89,8 @@ export default function App() {
   });
 
   // State for all data slices
-  const [weather, setWeather] = useState<WeatherData>(defaultWeatherData);
-  const [forecast, setForecast] = useState<ForecastDay[]>(defaultForecast);
+  const [weather, setWeather] = useState<WeatherData>(unavailableWeather);
+  const [forecast, setForecast] = useState<ForecastDay[]>([]);
   const [hourlyForecast, setHourlyForecast] = useState<HourlyForecast[]>([]);
   const [anomaly, setAnomaly] = useState<WeatherAnomaly>(defaultAnomaly);
   const [kpis, setKpis] = useState<KPIStats>(defaultKPIStats);
@@ -78,6 +102,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [dataConnected, setDataConnected] = useState<boolean>(true);
   const [weatherError, setWeatherError] = useState<string | null>('Loading live weather...');
+  const weatherRequestRef = useRef(0);
 
   // Fetch initial static/global data
   const fetchGlobalFeeds = useCallback(async (lat: number, lon: number) => {
@@ -120,8 +145,17 @@ export default function App() {
 
   // Fetch weather and forecast when selectedLocation changes
   const fetchWeatherData = useCallback(async (location: typeof selectedLocation) => {
+    const requestId = ++weatherRequestRef.current;
     setIsLoading(true);
     setWeatherError('Loading live weather...');
+    setWeather({
+      ...unavailableWeather,
+      location: location.name,
+      country: location.country,
+      state: location.state,
+      lat: location.lat,
+      lon: location.lon
+    });
     setForecast([]);
     setHourlyForecast([]);
     try {
@@ -132,7 +166,7 @@ export default function App() {
         country: location.country
       });
       if (location.state) params.set('state', location.state);
-      const res = await fetch(`/api/weather?${params.toString()}`);
+      const res = await fetch(`/api/weather?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) {
         throw new Error(`Live weather provider returned HTTP ${res.status}`);
       }
@@ -141,6 +175,7 @@ export default function App() {
       if (!incomingWeather || incomingWeather.lat !== location.lat || incomingWeather.lon !== location.lon) {
         throw new Error('Weather response coordinates do not match the selected location');
       }
+      if (requestId !== weatherRequestRef.current) return;
       setWeather(incomingWeather);
       setForecast(Array.isArray(data.forecast) ? data.forecast : []);
       setHourlyForecast(Array.isArray(data.hourly) ? data.hourly : []);
@@ -149,10 +184,11 @@ export default function App() {
       setDataConnected(true);
     } catch (err) {
       console.error('Error fetching live weather:', err);
+      if (requestId !== weatherRequestRef.current) return;
       try {
         // Use the official provider directly in the browser if Render cannot reach it.
         const directUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,visibility,cloud_cover&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,precipitation_probability,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,visibility,cloud_cover&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&forecast_days=8&timezone=auto&timeformat=iso8601`;
-        const directRes = await fetch(directUrl);
+        const directRes = await fetch(directUrl, { cache: 'no-store' });
         if (!directRes.ok) throw new Error(`Direct Open-Meteo HTTP ${directRes.status}`);
         const direct = await directRes.json();
         const current = direct.current;
@@ -172,6 +208,7 @@ export default function App() {
           anomalyScore: 0,
           riskLevel: 'Low'
         }));
+        if (requestId !== weatherRequestRef.current) return;
         setWeather({
           location: location.name,
           country: location.country,
@@ -195,7 +232,7 @@ export default function App() {
           weatherCode: current.weather_code,
           condition: weatherConditionFromCode(current.weather_code),
           source: 'OPEN-METEO',
-          lastUpdated: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'medium', timeZone: direct.timezone })
+          lastUpdated: new Date(current.time).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'medium', timeZone: direct.timezone })
         });
         setForecast(forecastFallback);
         const hourly = direct.hourly || {};
@@ -223,7 +260,7 @@ export default function App() {
         setDataConnected(false);
       }
     } finally {
-      setIsLoading(false);
+      if (requestId === weatherRequestRef.current) setIsLoading(false);
     }
   }, []);
 

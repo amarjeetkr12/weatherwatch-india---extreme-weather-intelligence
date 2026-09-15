@@ -67,6 +67,9 @@ export const RightPanel: React.FC<RightPanelProps> = ({
   weatherError,
   onSelectLocation
 }) => {
+  const formatMetric = (value: number, suffix: string, digits = 1) =>
+    Number.isFinite(value) ? `${value.toFixed(digits)}${suffix}` : 'Data unavailable';
+
   const [whyRiskOpen, setWhyRiskOpen] = useState(false);
   const [hazardWatchOpen, setHazardWatchOpen] = useState(true);
   const [timelineOpen, setTimelineOpen] = useState(true);
@@ -277,7 +280,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
         <div className="flex items-baseline justify-between mb-4">
           <div>
             <div className="text-4xl font-extrabold text-gray-900 tracking-tight">
-              {weatherError ? '--' : `${weather.temperature.toFixed(1)}°C`}
+              {weatherError ? 'Data unavailable' : formatMetric(weather.temperature, '°C')}
             </div>
             <div className="text-xs font-semibold text-gray-600 mt-0.5">
               {weatherError ? 'Awaiting live observation' : weather.condition}
@@ -297,41 +300,41 @@ export const RightPanel: React.FC<RightPanelProps> = ({
         {!weatherError && <div className="grid grid-cols-2 gap-y-2.5 gap-x-3 text-xs border-t border-gray-100 pt-3">
           <div className="flex justify-between items-center text-gray-600">
             <span className="text-gray-500">Feels Like</span>
-            <span className="font-semibold text-gray-900">{weather.apparentTemperature.toFixed(0)}°C</span>
+            <span className="font-semibold text-gray-900">{formatMetric(weather.apparentTemperature, '°C', 0)}</span>
           </div>
           <div className="flex justify-between items-center text-gray-600">
             <span className="text-gray-500">Humidity</span>
-            <span className="font-semibold text-gray-900">{weather.humidity}%</span>
+            <span className="font-semibold text-gray-900">{formatMetric(weather.humidity, '%', 0)}</span>
           </div>
           <div className="flex justify-between items-center text-gray-600">
             <span className="text-gray-500">Wind Speed</span>
             <span className="font-semibold text-gray-900">
-              {weather.windSpeed} km/h ({weather.windDirectionCompass})
+              {Number.isFinite(weather.windSpeed) ? `${weather.windSpeed.toFixed(1)} km/h (${weather.windDirectionCompass})` : 'Data unavailable'}
             </span>
           </div>
           <div className="flex justify-between items-center text-gray-600">
             <span className="text-gray-500">Rain Probability</span>
-            <span className="font-semibold text-gray-900">{weather.rainProbability}%</span>
+            <span className="font-semibold text-gray-900">{formatMetric(weather.rainProbability, '%', 0)}</span>
           </div>
           <div className="flex justify-between items-center text-gray-600">
             <span className="text-gray-500">Rainfall (last hour)</span>
-            <span className="font-semibold text-gray-900">{weather.rainAmount} mm</span>
+            <span className="font-semibold text-gray-900">{formatMetric(weather.rainAmount, ' mm')}</span>
           </div>
           <div className="flex justify-between items-center text-gray-600">
             <span className="text-gray-500">Total Precipitation</span>
-            <span className="font-semibold text-gray-900">{weather.precipitation} mm</span>
+            <span className="font-semibold text-gray-900">{formatMetric(weather.precipitation, ' mm')}</span>
           </div>
           <div className="flex justify-between items-center text-gray-600">
             <span className="text-gray-500">Pressure</span>
-            <span className="font-semibold text-gray-900">{weather.pressure} hPa</span>
+            <span className="font-semibold text-gray-900">{formatMetric(weather.pressure, ' hPa')}</span>
           </div>
           <div className="flex justify-between items-center text-gray-600">
             <span className="text-gray-500">Visibility</span>
-            <span className="font-semibold text-gray-900">{weather.visibility} km</span>
+            <span className="font-semibold text-gray-900">{formatMetric(weather.visibility, ' km')}</span>
           </div>
           <div className="flex justify-between items-center text-gray-600">
             <span className="text-gray-500">Cloud Cover</span>
-            <span className="font-semibold text-gray-900">{weather.cloudCover}%</span>
+            <span className="font-semibold text-gray-900">{formatMetric(weather.cloudCover, '%', 0)}</span>
           </div>
           <div className="flex justify-between items-center text-gray-600">
             <span className="text-gray-500">Air Quality (AQI)</span>
@@ -374,25 +377,25 @@ export const RightPanel: React.FC<RightPanelProps> = ({
 
             <div className="grid grid-cols-3 px-2 py-1.5 border-b border-gray-100 items-center">
               <span className="text-[11px] font-medium text-gray-600">Temperature</span>
-              <span className="text-center font-bold text-gray-900">{weather.temperature.toFixed(1)}°C</span>
+              <span className="text-center font-bold text-gray-900">{formatMetric(weather.temperature, '°C')}</span>
               <span className="text-right font-bold text-indigo-700">{weather.uploadedComparison.tempC.toFixed(1)}°C</span>
             </div>
 
             <div className="grid grid-cols-3 px-2 py-1.5 border-b border-gray-100 items-center">
               <span className="text-[11px] font-medium text-gray-600">Rainfall</span>
-              <span className="text-center font-bold text-gray-900">{weather.precipitation} mm</span>
+              <span className="text-center font-bold text-gray-900">{formatMetric(weather.precipitation, ' mm')}</span>
               <span className="text-right font-bold text-indigo-700">{weather.uploadedComparison.rainfallMm} mm</span>
             </div>
 
             <div className="grid grid-cols-3 px-2 py-1.5 border-b border-gray-100 items-center">
               <span className="text-[11px] font-medium text-gray-600">Wind Velocity</span>
-              <span className="text-center font-bold text-gray-900">{weather.windSpeed} km/h</span>
+              <span className="text-center font-bold text-gray-900">{formatMetric(weather.windSpeed, ' km/h')}</span>
               <span className="text-right font-bold text-indigo-700">{weather.uploadedComparison.windKmh} km/h</span>
             </div>
 
             <div className="grid grid-cols-3 px-2 py-1.5 items-center">
               <span className="text-[11px] font-medium text-gray-600">Atm. Pressure</span>
-              <span className="text-center font-bold text-gray-900">{weather.pressure} hPa</span>
+              <span className="text-center font-bold text-gray-900">{formatMetric(weather.pressure, ' hPa')}</span>
               <span className="text-right font-bold text-indigo-700">{weather.uploadedComparison.pressureHpa} hPa</span>
             </div>
           </div>
@@ -866,19 +869,19 @@ export const RightPanel: React.FC<RightPanelProps> = ({
               <div className="grid grid-cols-3 gap-2 text-xs pt-1 border-t border-amber-200/60">
                 <div>
                   <span className="text-[10px] text-amber-800">Recorded Temp</span>
-                  <div className="font-bold text-gray-900">{(weather.temperature - 1.1).toFixed(1)}°C</div>
+                  <div className="font-bold text-gray-900">Data unavailable</div>
                 </div>
                 <div>
                   <span className="text-[10px] text-amber-800">Rainfall</span>
-                  <div className="font-bold text-gray-900">0.0 mm</div>
+                  <div className="font-bold text-gray-900">Data unavailable</div>
                 </div>
                 <div>
                   <span className="text-[10px] text-amber-800">Data Status</span>
-                  <div className="font-bold text-emerald-700">Verified Sensor</div>
+                  <div className="font-bold text-gray-600">Data unavailable</div>
                 </div>
               </div>
               <div className="text-[10px] text-amber-800 italic pt-1">
-                Direct sensor observation from regional IMD/MET archive. Never invent unverified past events.
+                No historical observation is available for this location.
               </div>
             </div>
           )}
@@ -894,11 +897,11 @@ export const RightPanel: React.FC<RightPanelProps> = ({
               <div className="grid grid-cols-3 gap-2 text-xs pt-1 border-t border-blue-200/60">
                 <div>
                   <span className="text-[10px] text-blue-800">Current Temp</span>
-                  <div className="font-bold text-gray-900">{weather.temperature.toFixed(1)}°C</div>
+                  <div className="font-bold text-gray-900">{formatMetric(weather.temperature, '°C')}</div>
                 </div>
                 <div>
                   <span className="text-[10px] text-blue-800">Atmosphere</span>
-                  <div className="font-bold text-gray-900">{weather.condition}</div>
+                  <div className="font-bold text-gray-900">{weather.condition || 'Data unavailable'}</div>
                 </div>
                 <div>
                   <span className="text-[10px] text-blue-800">Anomaly Risk</span>

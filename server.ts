@@ -190,10 +190,10 @@ app.get('/api/geocoding', async (req, res) => {
 
 // Live Weather & Forecast Endpoint
 app.get('/api/weather', async (req, res) => {
-  const lat = parseFloat(String(req.query.lat || '28.6139'));
-  const lon = parseFloat(String(req.query.lon || '77.2090'));
-  const locationName = String(req.query.location || req.query.name || req.query.q || 'New Delhi');
-  const countryName = String(req.query.country || 'Unknown');
+  const lat = parseFloat(String(req.query.lat || ''));
+  const lon = parseFloat(String(req.query.lon || ''));
+  const locationName = String(req.query.location || req.query.name || req.query.q || '').trim();
+  const countryName = String(req.query.country || '').trim();
   const stateName = String(req.query.state || '');
   try {
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
@@ -203,7 +203,11 @@ app.get('/api/weather', async (req, res) => {
     const aqiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm10,pm2_5,european_aqi`;
 
     const [weatherRes, aqiRes] = await Promise.all([
-      fetch(weatherUrl, { signal: AbortSignal.timeout(12000) }),
+      fetch(weatherUrl, {
+        signal: AbortSignal.timeout(12000),
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      }),
       fetch(aqiUrl, { signal: AbortSignal.timeout(8000) }).catch(() => null)
     ]);
 
@@ -353,7 +357,7 @@ app.get('/api/weather', async (req, res) => {
       condition,
       aqi: aqiObj,
       source: 'OPEN-METEO',
-      lastUpdated: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'medium', timeZone: weatherJson.timezone })
+      lastUpdated: new Date(current.time).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'medium', timeZone: weatherJson.timezone })
     };
 
     const result = {

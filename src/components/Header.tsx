@@ -122,7 +122,7 @@ export const Header: React.FC<HeaderProps> = ({
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [timezone]);
 
   // Handle clicking outside of search dropdown
   useEffect(() => {

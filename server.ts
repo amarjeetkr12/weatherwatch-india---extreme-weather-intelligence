@@ -1,8 +1,9 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { DEFAULT_DATASETS, GLOBAL_GRID_NODES, OBSERVED_CYCLONES, TSUNAMI_EVENTS, PRESET_GEOCODING } from './src/data/defaultData';
-import { WeatherDataset, WeatherData, ForecastDay, WeatherAnomaly, EarthquakeHazard } from './src/types/weather';
+import { WeatherDataset, WeatherData, ForecastDay, WeatherAnomaly, EarthquakeHazard, HourlyForecast } from './src/types/weather';
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -64,6 +65,187 @@ function mapGoogleCondition(value: unknown): string | undefined {
   if (typeof condition.description === 'string') return condition.description;
   if (condition.description && typeof condition.description.text === 'string') return condition.description.text;
   return condition.type;
+}
+
+function googleDegrees(value: unknown): number | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const degrees = (value as { degrees?: unknown }).degrees;
+  return typeof degrees === 'number' ? degrees : undefined;
+}
+
+function googleValue(value: unknown): number | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const numericValue = (value as { value?: unknown }).value;
+  return typeof numericValue === 'number' ? numericValue : undefined;
+}
+
+function googleQuantity(value: unknown): number | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const quantity = (value as { quantity?: unknown }).quantity;
+  return typeof quantity === 'number' ? quantity : undefined;
+}
+
+function googlePercent(value: unknown): number | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const percent = (value as { percent?: unknown }).percent;
+  return typeof percent === 'number' ? percent : undefined;
+}
+
+function googleDescription(value: unknown): string {
+  return mapGoogleCondition(value) || 'Data unavailable';
+}
+
+async function fetchGoogleWeather(
+  lat: number,
+  lon: number,
+  locationName: string,
+  countryName: string,
+  stateName: string,
+  apiKey: string,
+  aqi: WeatherData['aqi'] | undefined
+) {
+  const location = `location.latitude=${lat}&location.longitude=${lon}`;
+  const urls = [
+    `https://weather.googleapis.com/v1/currentConditions:lookup?key=${encodeURIComponent(apiKey)}&${location}&unitsSystem=METRIC`,
+    `https://weather.googleapis.com/v1/forecast/hours:lookup?key=${encodeURIComponent(apiKey)}&${location}&hours=48&pageSize=48&unitsSystem=METRIC`,
+    `https://weather.googleapis.com/v1/forecast/days:lookup?key=${encodeURIComponent(apiKey)}&${location}&days=8&pageSize=8&unitsSystem=METRIC`
+  ];
+  const responses = await Promise.all(urls.map(url => fetch(url, {
+    signal: AbortSignal.timeout(12000),
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache' }
+  })));
+  if (responses.some(response => !response.ok)) {
+    const failed = responses.find(response => !response.ok);
+    throw new Error(`Google Weather HTTP ${failed?.status || 'error'}`);
+  }
+  const [current, hourly, daily] = await Promise.all(responses.map(response => response.json()));
+  const currentTemperature = googleDegrees(current.temperature);
+  const apparentTemperature = googleDegrees(current.feelsLikeTemperature);
+  const humidity = current.relativeHumidity;
+  const windSpeed = googleValue(current.wind?.speed);
+  const windDirection = googleNumber(current.wind?.direction?.degrees);
+  const pressure = googleNumber(current.airPressure?.meanSeaLevelMillibars);
+  const visibility = googleNumber(current.visibility?.distance);
+  const cloudCover = current.cloudCover;
+  if (![currentTemperature, apparentTemperature, humidity, windSpeed, windDirection, pressure, visibility, cloudCover].every(value => typeof value === 'number' && Number.isFinite(value))) {
+    throw new Error('Google Weather current response is missing required fields');
+  }
+
+  const timezone = current.timeZone?.id || hourly.timeZone?.id || daily.timeZone?.id;
+  if (!timezone || typeof current.currentTime !== 'string') {
+    throw new Error('Google Weather response is missing timezone or current timestamp');
+  }
+  const forecastHours = Array.isArray(hourly.forecastHours) ? hourly.forecastHours : [];
+  const hourlyForecast: HourlyForecast[] = forecastHours.map((item: any) => {
+    const itemTemperature = googleDegrees(item.temperature);
+    const itemApparent = googleDegrees(item.feelsLikeTemperature);
+    const itemHumidity = item.relativeHumidity;
+    const itemPrecipitation = googleQuantity(item.precipitation?.qpf);
+    const itemProbability = googlePercent(item.precipitation?.probability);
+    const itemWindSpeed = googleValue(item.wind?.speed);
+    const itemWindDirection = googleNumber(item.wind?.direction?.degrees);
+    const itemPressure = googleNumber(item.airPressure?.meanSeaLevelMillibars);
+    const itemVisibility = googleNumber(item.visibility?.distance);
+    const itemCloudCover = item.cloudCover;
+    const values = [itemTemperature, itemApparent, itemHumidity, itemPrecipitation, itemProbability, itemWindSpeed, itemWindDirection, itemPressure, itemVisibility, itemCloudCover];
+    if (values.some(value => typeof value !== 'number' || !Number.isFinite(value)) || typeof item.interval?.startTime !== 'string') return null;
+    return {
+      time: item.interval.startTime,
+      temperature: Number(itemTemperature.toFixed(1)),
+      apparentTemperature: Number(itemApparent.toFixed(1)),
+      humidity: Math.round(itemHumidity),
+      precipitation: Number(itemPrecipitation.toFixed(1)),
+      rainAmount: Number(itemPrecipitation.toFixed(1)),
+      rainProbability: itemProbability,
+      windSpeed: Number(itemWindSpeed.toFixed(1)),
+      windDirection: itemWindDirection,
+      pressure: Number(itemPressure.toFixed(1)),
+      visibility: Number(itemVisibility.toFixed(1)),
+      cloudCover: itemCloudCover,
+      weatherCode: 0,
+      condition: googleDescription(item.weatherCondition)
+    };
+  }).filter(Boolean) as HourlyForecast[];
+
+  const forecastDays = Array.isArray(daily.forecastDays) ? daily.forecastDays : [];
+  const forecast: ForecastDay[] = forecastDays.map((item: any, index: number) => {
+    const daytime = item.daytimeForecast || item.nighttimeForecast || {};
+    const maxTemp = googleDegrees(item.maxTemperature);
+    const minTemp = googleDegrees(item.minTemperature);
+    const precipitation = googleQuantity(daytime.precipitation?.qpf);
+    const probability = googlePercent(daytime.precipitation?.probability);
+    const dayWind = googleValue(daytime.wind?.speed);
+    if (![maxTemp, minTemp, precipitation, probability, dayWind].every(value => typeof value === 'number' && Number.isFinite(value))) return null;
+    const date = item.interval?.startTime || `${item.displayDate?.year}-${String(item.displayDate?.month).padStart(2, '0')}-${String(item.displayDate?.day).padStart(2, '0')}`;
+    return {
+      dayName: index === 0 ? 'Today' : `+${index} Day`,
+      date,
+      maxTemp: Number(maxTemp.toFixed(1)),
+      minTemp: Number(minTemp.toFixed(1)),
+      precipitation: Number(precipitation.toFixed(1)),
+      rainProbability: probability,
+      windSpeed: Number(dayWind.toFixed(1)),
+      condition: googleDescription(daytime.weatherCondition),
+      weatherCode: 0,
+      anomalyScore: 0,
+      riskLevel: precipitation > 30 ? 'High' : maxTemp > 38 ? 'High' : 'Low'
+    };
+  }).filter(Boolean) as ForecastDay[];
+  const firstDay = forecastDays[0];
+  const sunEvents = firstDay?.sunEvents || {};
+
+  const weatherData: WeatherData = {
+    location: locationName,
+    country: countryName,
+    state: stateName || undefined,
+    lat,
+    lon,
+    timezone,
+    temperature: Number(currentTemperature.toFixed(1)),
+    apparentTemperature: Number(apparentTemperature.toFixed(1)),
+    humidity: Math.round(humidity),
+    windSpeed: Number(windSpeed.toFixed(1)),
+    windDirection,
+    windDirectionCompass: getWindCompass(windDirection),
+    rainProbability: googlePercent(current.precipitation?.probability) ?? 0,
+    precipitation: Number((googleQuantity(current.precipitation?.qpf) ?? 0).toFixed(1)),
+    rainAmount: Number((googleQuantity(current.precipitation?.qpf) ?? 0).toFixed(1)),
+    pressure: Number(pressure.toFixed(1)),
+    visibility: Number(visibility.toFixed(1)),
+    cloudCover,
+    uvIndex: typeof current.uvIndex === 'number' ? current.uvIndex : 0,
+    weatherCode: 0,
+    condition: googleDescription(current.weatherCondition),
+    aqi,
+    sunrise: sunEvents.sunriseTime || '',
+    sunset: sunEvents.sunsetTime || '',
+    observationTime: current.currentTime,
+    verification: {
+      satelliteSource: 'RainViewer public radar/satellite feed',
+      satelliteStatus: 'UNAVAILABLE',
+      note: 'Satellite imagery is verification context only; all numerical weather values come directly from Google Weather API.'
+    },
+    source: 'GOOGLE_WEATHER',
+    lastUpdated: new Date(current.currentTime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'medium', timeZone: timezone })
+  };
+  return { weather: weatherData, current: weatherData, forecast, hourly: hourlyForecast };
+}
+
+function parseOpenMeteoAqi(aqiJson: any): WeatherData['aqi'] | undefined {
+  const current = aqiJson?.current;
+  if (!current || typeof current.pm2_5 !== 'number' || typeof current.pm10 !== 'number' || typeof current.european_aqi !== 'number') return undefined;
+  const value = Math.round(current.european_aqi);
+  const category: NonNullable<WeatherData['aqi']>['category'] = value <= 50
+    ? 'Good'
+    : value <= 100
+      ? 'Moderate'
+      : value <= 150
+        ? 'Unhealthy for Sensitive'
+        : value <= 200
+          ? 'Unhealthy'
+          : 'Hazardous';
+  return { value, category, pm25: current.pm2_5, pm10: current.pm10 };
 }
 
 function distanceKmBetween(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -219,23 +401,31 @@ app.get('/api/weather', async (req, res) => {
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
       return res.status(400).json({ error: 'Valid latitude and longitude are required' });
     }
-    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,visibility,cloud_cover&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,precipitation_probability,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,visibility,cloud_cover&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,sunrise,sunset&forecast_days=8&timezone=auto&timeformat=iso8601`;
+    const googleKey = (process.env.GOOGLE_WEATHER_API_KEY || process.env.GOOGLE_MAPS_API_KEY)?.trim();
     const aqiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm10,pm2_5,european_aqi`;
-    const googleKey = process.env.GOOGLE_WEATHER_API_KEY;
-    const googleUrl = googleKey
-      ? `https://weather.googleapis.com/v1/currentConditions:lookup?location.latitude=${lat}&location.longitude=${lon}&units=METRIC&key=${encodeURIComponent(googleKey)}`
-      : null;
+    if (googleKey) {
+      try {
+        const aqiResponse = await fetch(aqiUrl, { signal: AbortSignal.timeout(8000), cache: 'no-store' });
+        const aqiJson = aqiResponse.ok ? await aqiResponse.json().catch(() => null) : null;
+        const googleResult = await fetchGoogleWeather(lat, lon, locationName, countryName, stateName, googleKey, parseOpenMeteoAqi(aqiJson));
+        return res.json(googleResult);
+      } catch (error: any) {
+        console.error('Google Weather fetch error:', error.message);
+        return res.status(503).json({
+          error: 'Google Weather provider unavailable',
+          message: 'Live Google Weather data is unavailable. No fallback observation was substituted.'
+        });
+      }
+    }
+    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,visibility,cloud_cover&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,precipitation_probability,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,visibility,cloud_cover&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,sunrise,sunset&forecast_days=8&timezone=auto&timeformat=iso8601`;
 
-    const [weatherRes, aqiRes, googleRes] = await Promise.all([
+    const [weatherRes, aqiRes] = await Promise.all([
       fetch(weatherUrl, {
         signal: AbortSignal.timeout(12000),
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' }
       }),
-      fetch(aqiUrl, { signal: AbortSignal.timeout(8000), cache: 'no-store' }).catch(() => null),
-      googleUrl
-        ? fetch(googleUrl, { signal: AbortSignal.timeout(8000), cache: 'no-store' }).catch(() => null)
-        : Promise.resolve(null)
+      fetch(aqiUrl, { signal: AbortSignal.timeout(8000), cache: 'no-store' }).catch(() => null)
     ]);
     const radarVerification = await fetch('https://api.rainviewer.com/public/weather-maps.json', {
       signal: AbortSignal.timeout(5000),
@@ -259,7 +449,6 @@ app.get('/api/weather', async (req, res) => {
     if (aqiRes && aqiRes.ok) {
       aqiJson = await aqiRes.json().catch(() => null);
     }
-    const googleJson = googleRes && googleRes.ok ? await googleRes.json().catch(() => null) : null;
 
     const current = weatherJson.current || {};
     const daily = weatherJson.daily || {};
@@ -281,48 +470,8 @@ app.get('/api/weather', async (req, res) => {
     const pressure = current.surface_pressure;
     const weatherCode = current.weather_code;
     const condition = getWeatherCondition(weatherCode);
-    const googleTemperature = googleNumber(googleJson?.temperature);
-    const googleApparentTemperature = googleNumber(googleJson?.feelsLikeTemperature);
-    const googleHumidity = googleNumber(googleJson?.relativeHumidity);
-    const googleWindSpeed = googleNumber(googleJson?.wind?.speed);
-    const googleWindDirection = googleNumber(googleJson?.wind?.direction);
-    const googlePressure = googleNumber(googleJson?.pressure?.meanSeaLevel);
-    const googleVisibility = googleNumber(googleJson?.visibility?.distance);
-    const googleCloudCover = googleNumber(googleJson?.cloudCover);
-    const googleCurrentTime = googleTime(googleJson?.currentTime);
-    const hasGoogleCurrent = [googleTemperature, googleApparentTemperature, googleHumidity, googleWindSpeed, googleWindDirection, googlePressure].every(value => typeof value === 'number' && Number.isFinite(value));
-    const provider = hasGoogleCurrent ? 'GOOGLE_WEATHER' : 'OPEN-METEO';
-    const currentTemperature = hasGoogleCurrent ? googleTemperature! : temp;
-    const currentApparentTemperature = hasGoogleCurrent ? googleApparentTemperature! : apparentTemp;
-    const currentHumidity = hasGoogleCurrent ? googleHumidity! : humidity;
-    const currentWindSpeed = hasGoogleCurrent ? googleWindSpeed! : windSpeed;
-    const currentWindDirection = hasGoogleCurrent ? googleWindDirection! : windDir;
-    const currentPressure = hasGoogleCurrent ? googlePressure! : pressure;
-    const currentVisibility = hasGoogleCurrent && typeof googleVisibility === 'number' ? googleVisibility / 1000 : current.visibility / 1000;
-    const currentCloudCover = hasGoogleCurrent && typeof googleCloudCover === 'number' ? googleCloudCover : current.cloud_cover;
-    const currentCondition = hasGoogleCurrent ? (mapGoogleCondition(googleJson?.weatherCondition) || condition) : condition;
-    const observationTime = googleCurrentTime || current.time;
-
     // Parse AQI
-    let aqiObj: WeatherData['aqi'] = undefined;
-    if (aqiJson && aqiJson.current && typeof aqiJson.current.pm2_5 === 'number' && typeof aqiJson.current.pm10 === 'number' && typeof aqiJson.current.european_aqi === 'number') {
-      const pm25 = aqiJson.current.pm2_5;
-      const pm10 = aqiJson.current.pm10;
-      const val = Math.round(aqiJson.current.european_aqi);
-      let cat: 'Good' | 'Moderate' | 'Unhealthy for Sensitive' | 'Unhealthy' | 'Very Unhealthy' | 'Hazardous' = 'Moderate';
-      if (val <= 50) cat = 'Good';
-      else if (val <= 100) cat = 'Moderate';
-      else if (val <= 150) cat = 'Unhealthy for Sensitive';
-      else if (val <= 200) cat = 'Unhealthy';
-      else cat = 'Hazardous';
-
-      aqiObj = {
-        value: val,
-        category: cat,
-        pm25,
-        pm10
-      };
-    }
+    const aqiObj = parseOpenMeteoAqi(aqiJson);
 
     const daysList = ['Today', '+1 Day', '+2 Days', '+3 Days', '+4 Days', '+5 Days', '+6 Days', '+7 Days'];
     const forecastDays: ForecastDay[] = [];
@@ -401,25 +550,25 @@ app.get('/api/weather', async (req, res) => {
       lat,
       lon,
       timezone: weatherJson.timezone,
-      temperature: Number(currentTemperature.toFixed(1)),
-      apparentTemperature: Number(currentApparentTemperature.toFixed(1)),
-      humidity: Math.round(currentHumidity),
-      windSpeed: Number(currentWindSpeed.toFixed(1)),
-      windDirection: currentWindDirection,
-      windDirectionCompass: getWindCompass(currentWindDirection),
+      temperature: Number(temp.toFixed(1)),
+      apparentTemperature: Number(apparentTemp.toFixed(1)),
+      humidity: Math.round(humidity),
+      windSpeed: Number(windSpeed.toFixed(1)),
+      windDirection: windDir,
+      windDirectionCompass: getWindCompass(windDir),
       rainProbability: forecastDays[0]?.rainProbability ?? 0,
       precipitation: Number(precip.toFixed(1)),
       rainAmount: Number(current.rain.toFixed(1)),
-      pressure: Number(currentPressure.toFixed(1)),
-      visibility: Number(currentVisibility.toFixed(1)),
-      cloudCover: currentCloudCover,
+      pressure: Number(pressure.toFixed(1)),
+      visibility: Number((current.visibility / 1000).toFixed(1)),
+      cloudCover: current.cloud_cover,
       uvIndex: 0,
       weatherCode,
-      condition: currentCondition,
+      condition,
       aqi: aqiObj,
       sunrise: daily.sunrise?.[0] || '',
       sunset: daily.sunset?.[0] || '',
-      observationTime,
+      observationTime: current.time,
       verification: {
         satelliteSource: 'RainViewer public radar/satellite feed',
         satelliteStatus: latestVerificationFrame ? 'AVAILABLE' : 'UNAVAILABLE',
@@ -428,8 +577,8 @@ app.get('/api/weather', async (req, res) => {
           : undefined,
         note: 'Satellite imagery is not used as a thermometer; temperature comes from the selected meteorological provider.'
       },
-      source: provider,
-      lastUpdated: new Date(observationTime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'medium', timeZone: weatherJson.timezone })
+      source: 'OPEN-METEO',
+      lastUpdated: new Date(current.time).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'medium', timeZone: weatherJson.timezone })
     };
 
     const result = {

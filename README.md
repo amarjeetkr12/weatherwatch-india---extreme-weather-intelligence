@@ -15,7 +15,7 @@ View your app in AI Studio: https://ai.studio/apps/77c5314f-3148-404b-84b5-09ce0
 
 1. Install dependencies:
    `npm install`
-2. Optionally set `GOOGLE_WEATHER_API_KEY` in `.env.local` or the deployment environment. The server uses Google Weather current conditions when this key is present, and Open-Meteo otherwise.
+2. Optionally set `GOOGLE_WEATHER_API_KEY` (or `GOOGLE_MAPS_API_KEY`) in `.env` or the deployment environment. The server uses Google Weather current conditions and Google hourly/daily forecasts when this key is present, and Open-Meteo otherwise.
 3. Run the app:
    `npm run dev`
 

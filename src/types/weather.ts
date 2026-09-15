@@ -20,13 +20,22 @@ export interface WeatherData {
   uvIndex: number;
   weatherCode: number;
   condition: string;
+  sunrise: string;
+  sunset: string;
+  observationTime: string;
+  verification?: {
+    satelliteSource: string;
+    satelliteStatus: 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_NUMERIC_WEATHER_DATA';
+    satelliteUpdatedAt?: string;
+    note: string;
+  };
   aqi?: {
     value: number;
     category: 'Good' | 'Moderate' | 'Unhealthy for Sensitive' | 'Unhealthy' | 'Very Unhealthy' | 'Hazardous';
     pm25: number;
     pm10: number;
   };
-  source: 'OPEN-METEO' | 'OFFICIAL' | 'MODEL-DERIVED' | 'SAMPLE' | 'UPLOADED';
+  source: 'GOOGLE_WEATHER' | 'OPEN-METEO' | 'OFFICIAL' | 'MODEL-DERIVED' | 'SAMPLE' | 'UPLOADED';
   datasetName?: string;
   datasetId?: string;
   historicalTemp?: number;

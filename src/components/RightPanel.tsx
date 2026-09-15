@@ -69,6 +69,11 @@ export const RightPanel: React.FC<RightPanelProps> = ({
 }) => {
   const formatMetric = (value: number, suffix: string, digits = 1) =>
     Number.isFinite(value) ? `${value.toFixed(digits)}${suffix}` : 'Data unavailable';
+  const formatLocalTime = (value: string) => {
+    if (!value) return 'Data unavailable';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'Data unavailable' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: weather.timezone });
+  };
 
   const [whyRiskOpen, setWhyRiskOpen] = useState(false);
   const [hazardWatchOpen, setHazardWatchOpen] = useState(true);
@@ -335,6 +340,10 @@ export const RightPanel: React.FC<RightPanelProps> = ({
           <div className="flex justify-between items-center text-gray-600">
             <span className="text-gray-500">Cloud Cover</span>
             <span className="font-semibold text-gray-900">{formatMetric(weather.cloudCover, '%', 0)}</span>
+          </div>
+          <div className="flex justify-between items-center text-gray-600">
+            <span className="text-gray-500">Sunrise / Sunset</span>
+            <span className="font-semibold text-gray-900">{formatLocalTime(weather.sunrise)} / {formatLocalTime(weather.sunset)}</span>
           </div>
           <div className="flex justify-between items-center text-gray-600">
             <span className="text-gray-500">Air Quality (AQI)</span>

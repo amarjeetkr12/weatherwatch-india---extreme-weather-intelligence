@@ -50,6 +50,9 @@ const unavailableWeather: WeatherData = {
   uvIndex: Number.NaN,
   weatherCode: Number.NaN,
   condition: '',
+  sunrise: '',
+  sunset: '',
+  observationTime: '',
   source: 'OPEN-METEO',
   lastUpdated: ''
 };

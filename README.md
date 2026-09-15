@@ -15,7 +15,7 @@ View your app in AI Studio: https://ai.studio/apps/77c5314f-3148-404b-84b5-09ce0
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Optionally set `GOOGLE_WEATHER_API_KEY` in `.env.local` or the deployment environment. The server uses Google Weather current conditions when this key is present, and Open-Meteo otherwise.
 3. Run the app:
    `npm run dev`
 
@@ -28,4 +28,4 @@ This repository includes a `render.yaml` Blueprint configuration.
 3. Deploy with the configured build command: `npm ci && npm run build`.
 4. The production service starts with `npm start` and uses Render's injected `PORT`.
 
-The `/api/health` endpoint is configured as the Render health check. No API key is required for the live Open-Meteo, USGS, geocoding, OSM, satellite, and terrain integrations.
+The `/api/health` endpoint is configured as the Render health check. No key is required for Open-Meteo, USGS, geocoding, or RainViewer verification. Satellite/radar imagery is verification context only and is never used as a thermometer. Configure `GOOGLE_WEATHER_API_KEY` to enable Google current-condition data.

@@ -87,10 +87,8 @@ export const WeatherMap: React.FC<WeatherMapProps> = ({
 
   const totalDatasetRecords = datasets.reduce((acc, d) => acc + (d.records?.length || 0), 0);
 
-  const mapTileApiKey = import.meta.env.VITE_MAP_TILE_API_KEY?.trim();
-
-  // Use an application-ready provider for the OSM-style basemap. CARTO is the
-  // no-key fallback so the map remains usable before the deployment key exists.
+  // Use a legitimate application-ready street basemap instead of OSM's
+  // volunteer tile servers, which are not intended for embedded applications.
   const getTileConfig = (type: BasemapType) => {
     switch (type) {
       case 'satellite':
@@ -116,19 +114,11 @@ export const WeatherMap: React.FC<WeatherMapProps> = ({
         };
       case 'osm':
       default:
-        if (mapTileApiKey) {
-          return {
-            url: `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${encodeURIComponent(mapTileApiKey)}`,
-            attribution: '&copy; <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener noreferrer">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
-            maxNativeZoom: 20,
-            providerLabel: 'MapTiler Streets'
-          };
-        }
         return {
-          url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>',
-          maxNativeZoom: 20,
-          providerLabel: 'CARTO Voyager (fallback)'
+          url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+          attribution: '&copy; Esri, HERE, Garmin, Intermap, increment P Corp., GEBCO, USGS, FAO, NPS, NRCAN, GeoBase, IGN, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), and the GIS User Community',
+          maxNativeZoom: 19,
+          providerLabel: 'Esri World Street Map'
         };
     }
   };

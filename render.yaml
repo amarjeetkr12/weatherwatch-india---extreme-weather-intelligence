@@ -10,5 +10,3 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: VITE_MAP_TILE_API_KEY
-        sync: false

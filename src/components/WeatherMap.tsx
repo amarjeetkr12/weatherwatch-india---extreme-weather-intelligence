@@ -87,33 +87,48 @@ export const WeatherMap: React.FC<WeatherMapProps> = ({
 
   const totalDatasetRecords = datasets.reduce((acc, d) => acc + (d.records?.length || 0), 0);
 
-  // Tile layer URLs - Default: OpenStreetMap (real OSM tiles without API keys)
+  const mapTileApiKey = import.meta.env.VITE_MAP_TILE_API_KEY?.trim();
+
+  // Use an application-ready provider for the OSM-style basemap. CARTO is the
+  // no-key fallback so the map remains usable before the deployment key exists.
   const getTileConfig = (type: BasemapType) => {
     switch (type) {
       case 'satellite':
         return {
           url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
           attribution: '&copy; Esri, Maxar, Earthstar Geographics, USDA, USGS, AeroGRID, IGN, and the GIS User Community',
-          maxNativeZoom: 19
+          maxNativeZoom: 19,
+          providerLabel: 'Esri Satellite'
         };
       case 'terrain':
         return {
           url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
           attribution: '&copy; Esri, HERE, Garmin, Intermap, increment P Corp., GEBCO, USGS, FAO, NPS, NRCAN, GeoBase, IGN, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong)',
-          maxNativeZoom: 19
+          maxNativeZoom: 19,
+          providerLabel: 'Esri Topographic'
         };
       case 'carto':
         return {
           url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-          maxNativeZoom: 20
+          maxNativeZoom: 20,
+          providerLabel: 'CARTO Voyager'
         };
       case 'osm':
       default:
+        if (mapTileApiKey) {
+          return {
+            url: `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${encodeURIComponent(mapTileApiKey)}`,
+            attribution: '&copy; <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener noreferrer">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
+            maxNativeZoom: 20,
+            providerLabel: 'MapTiler Streets'
+          };
+        }
         return {
-          url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
-          maxNativeZoom: 19
+          url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>',
+          maxNativeZoom: 20,
+          providerLabel: 'CARTO Voyager (fallback)'
         };
     }
   };
@@ -950,7 +965,7 @@ export const WeatherMap: React.FC<WeatherMapProps> = ({
               className={`flex items-center space-x-1 px-2 py-1 rounded-md font-medium transition-all ${
                 basemap === 'osm' ? 'bg-blue-600 text-white shadow-xs' : 'text-gray-700 hover:bg-gray-100'
               }`}
-              title="Official OpenStreetMap Live Basemap (no API key required)"
+              title={`OSM-based basemap via ${getTileConfig('osm').providerLabel}`}
             >
               <MapIcon className="w-3 h-3" />
               <span>OSM</span>
@@ -974,6 +989,16 @@ export const WeatherMap: React.FC<WeatherMapProps> = ({
             >
               <Mountain className="w-3 h-3" />
               <span>TERRAIN</span>
+            </button>
+            <button
+              onClick={() => handleBasemapChange('carto')}
+              className={`flex items-center space-x-1 px-2 py-1 rounded-md font-medium transition-all ${
+                basemap === 'carto' ? 'bg-blue-600 text-white shadow-xs' : 'text-gray-700 hover:bg-gray-100'
+              }`}
+              title="CARTO Voyager basemap"
+            >
+              <MapIcon className="w-3 h-3" />
+              <span>CARTO</span>
             </button>
           </div>
         </div>
@@ -1104,7 +1129,7 @@ export const WeatherMap: React.FC<WeatherMapProps> = ({
           <div className="font-bold text-gray-800 text-[10px] uppercase tracking-wider flex items-center justify-between border-b border-gray-100 pb-1">
             <span>Map Legend</span>
             <span className="text-[9px] text-gray-500 font-normal">
-              {basemap === 'satellite' ? 'Esri Satellite' : basemap === 'terrain' ? 'Topo Contours' : 'CartoDB Voyager'}
+              {getTileConfig(basemap).providerLabel}
             </span>
           </div>
           <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-gray-600 text-[10px]">
